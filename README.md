@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>Built to keep agent work visible, accountable and reviewable.</strong>
+  <strong>Built to keep agent work visible, accountable and reviewable before it burns tokens, CPU and power.</strong>
 </p>
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
@@ -23,6 +23,8 @@
 AI coding agents can act quickly across shells, files, credentials and networked tools. Most of the time that is useful. Sometimes it is surprising, unsafe or simply not what you asked for. Foreman exists so a human operator can keep an eye on that behaviour without reading every terminal line.
 
 Foreman is a safety monitor, not a sandbox or policy enforcer. It runs at medium integrity (no admin, no UAC), sits in the tray and raises explainable alerts when an agent does something worth reviewing. Its MCP bridge also lets one harness or API act as the auditor for another, so you can use a second AI to triage the first AI's actions.
+
+It can also save real money. Every runaway loop caught early is fewer paid tokens, less CPU time and a lower power bill.
 
 ## What it does
 
@@ -194,4 +196,4 @@ GPL-3.0-or-later. See [LICENSE](LICENSE). Contributions are accepted under the s
 
 ## Support
 
-Foreman is free and GPL. If it helped you keep agent work safer and you want to chip in, there's a Ko-fi: <https://ko-fi.com/axl333>.
+Foreman is free and GPL. If it helped you keep agent work safer, saved tokens or trimmed a power bill and you want to chip in, there's a Ko-fi: <https://ko-fi.com/axl333>.
