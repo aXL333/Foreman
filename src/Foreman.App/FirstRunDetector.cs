@@ -5,7 +5,7 @@ namespace Foreman.App;
 
 /// <summary>
 /// On first launch, detects whether Claude Code is installed and shows
-/// a one-time welcome dialog explaining how to connect Foreman.
+/// a one-time welcome dialog explaining Foreman's safety monitor role.
 /// </summary>
 public static class FirstRunDetector
 {
@@ -39,20 +39,23 @@ public static class FirstRunDetector
                   ? "Your ~/.mcp.json is already configured — Claude Code will connect automatically."
                   : $"To connect Claude Code, run:\n\n  claude mcp add foreman http://localhost:{mcpPort}/mcp\n\nOr add to ~/.mcp.json:\n  \"foreman\": {{ \"type\": \"http\", \"url\": \"http://localhost:{mcpPort}/mcp\" }}")}
 
-              Foreman will monitor harness processes, detect hangs and orphans,
-              and alert you to dangerous CLI patterns — all from the system tray.
+              Foreman will watch agent process trees, flag risky CLI patterns,
+              attribute spawned processes and expose audit routes so another
+              harness or API can review the session.
 
-              Right-click the tray icon to open the log, or double-click to view events.
+              Left-click the tray icon for the dashboard. Right-click for tools and settings.
+              Double-click to open the event log.
               """
             : $"""
               Welcome to Foreman!
 
-              Foreman is running on port {mcpPort} and monitoring this machine.
+              Foreman is running on port {mcpPort} as an agent safety monitor.
 
               To connect an MCP client, point it at:
                 http://localhost:{mcpPort}/mcp
 
-              Right-click the tray icon to open the log, or double-click to view events.
+              Left-click the tray icon for the dashboard. Right-click for tools and settings.
+              Double-click to open the event log.
               """;
 
         MessageBox.Show(msg, "Foreman — First Run", MessageBoxButton.OK, MessageBoxImage.Information);
