@@ -18,6 +18,7 @@ public partial class App : Application
     private MonitorService? _monitor;
     private McpServerHost? _mcpHost;
     private ElevatedSidecarController? _sidecar;
+    private McpToolScanMonitor? _toolScan;
     private CancellationTokenSource? _cts;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -92,6 +93,26 @@ public partial class App : Application
             if (on) _sidecar.Start(); else _sidecar.Stop();
         };
 
+        // Tier 1 (opt-in): MCP tool-description injection scan. Constructed always so the Settings
+        // toggle can start/stop it at runtime, but it only connects out when enabled. When off, the
+        // ListMcpToolFindings MCP tool reports "scanning disabled" (GetMcpToolScan stays null).
+        _toolScan = new McpToolScanMonitor(EventBus.Instance, () => _monitor.McpInventory.Current, settings.McpPort);
+        void ApplyScanMcpTools(bool on)
+        {
+            if (on)
+            {
+                _mcpHost.State.GetMcpToolScan = () => (_toolScan!.Current, _toolScan.LastSummary);
+                _toolScan!.Start();
+            }
+            else
+            {
+                _toolScan!.Stop();
+                _mcpHost.State.GetMcpToolScan = null;
+            }
+        }
+        _tray.ApplyScanMcpTools = ApplyScanMcpTools;
+        ApplyScanMcpTools(settings.ScanMcpTools);
+
         // start MCP on a background thread so we don't block the WPF message pump
         _ = _mcpHost.StartAsync(_cts.Token);
 
@@ -112,6 +133,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _cts?.Cancel();
+        _toolScan?.Dispose();
         _sidecar?.Dispose();
         _mcpHost?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(3));
         _monitor?.Dispose();

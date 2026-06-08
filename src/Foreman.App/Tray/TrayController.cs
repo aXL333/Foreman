@@ -49,6 +49,9 @@ public sealed class TrayController : IEventSink, IDisposable
     /// <summary>Injected from App — applies the Run Elevated toggle (persist + start/stop the sidecar).</summary>
     public Action<bool>?                                      ApplyRunElevated      { get; set; }
 
+    /// <summary>Injected from App — applies the Scan MCP tools toggle (start/stop the opt-in outbound probe).</summary>
+    public Action<bool>?                                      ApplyScanMcpTools     { get; set; }
+
     /// <summary>Injected from App — true when the elevated network sidecar is connected and feeding.</summary>
     public Func<bool>?                                        GetNetCaptureActive   { get; set; }
 
@@ -321,7 +324,7 @@ public sealed class TrayController : IEventSink, IDisposable
     {
         if (_settingsWindow is null || !_settingsWindow.IsLoaded)
         {
-            _settingsWindow = new SettingsWindow(_settings, ApplyRunElevated);
+            _settingsWindow = new SettingsWindow(_settings, ApplyRunElevated, ApplyScanMcpTools);
             _settingsWindow.Show();
         }
         WindowActivation.Surface(_settingsWindow);

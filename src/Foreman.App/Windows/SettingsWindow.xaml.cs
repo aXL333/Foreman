@@ -7,11 +7,15 @@ public partial class SettingsWindow : Window
 {
     private readonly ForemanSettings _settings;
     private readonly Action<bool>? _onRunElevatedChanged;
+    private readonly Action<bool>? _onScanMcpToolsChanged;
 
-    public SettingsWindow(ForemanSettings settings, Action<bool>? onRunElevatedChanged = null)
+    public SettingsWindow(ForemanSettings settings,
+                          Action<bool>? onRunElevatedChanged = null,
+                          Action<bool>? onScanMcpToolsChanged = null)
     {
         _settings = settings;
         _onRunElevatedChanged = onRunElevatedChanged;
+        _onScanMcpToolsChanged = onScanMcpToolsChanged;
         InitializeComponent();
         Populate();
     }
@@ -32,6 +36,7 @@ public partial class SettingsWindow : Window
         NotifyCriticalCheck.IsChecked = _settings.NotifyOnCriticalCommand;
         MonitorAllCheck.IsChecked    = _settings.MonitorAllProcesses;
         RunElevatedCheck.IsChecked   = _settings.RunElevated;
+        ScanMcpToolsCheck.IsChecked  = _settings.ScanMcpTools;
 
         // Escalation thresholds
         AlertMediumBox.Text    = _settings.AlertLevelMediumCount.ToString();
@@ -81,11 +86,13 @@ public partial class SettingsWindow : Window
             .ToArray();
 
         // ── Commit ───────────────────────────────────────────────────────────
-        var portChanged        = port != _settings.McpPort;
-        var runElevatedChanged = (RunElevatedCheck.IsChecked == true) != _settings.RunElevated;
+        var portChanged         = port != _settings.McpPort;
+        var runElevatedChanged  = (RunElevatedCheck.IsChecked == true) != _settings.RunElevated;
+        var scanMcpToolsChanged = (ScanMcpToolsCheck.IsChecked == true) != _settings.ScanMcpTools;
 
         _settings.McpPort                    = port;
         _settings.RunElevated                = RunElevatedCheck.IsChecked == true;
+        _settings.ScanMcpTools               = ScanMcpToolsCheck.IsChecked == true;
         _settings.HangThresholdMinutes       = hang;
         _settings.HookJamThresholdMinutes    = hook;
         _settings.AlertSuppressWindowMinutes = suppress;
@@ -110,6 +117,10 @@ public partial class SettingsWindow : Window
         // Apply the elevation toggle (starts/stops the sidecar; enabling prompts UAC).
         if (runElevatedChanged)
             _onRunElevatedChanged?.Invoke(_settings.RunElevated);
+
+        // Apply the MCP tool-scan toggle (starts/stops the opt-in outbound probe).
+        if (scanMcpToolsChanged)
+            _onScanMcpToolsChanged?.Invoke(_settings.ScanMcpTools);
 
         Close();
     }

@@ -491,6 +491,24 @@ public static class ForemanMcpTools
         };
     }
 
+    [McpServerTool, Description(
+        "Reports the latest MCP tool-description injection scan (server, tool, matched signal, excerpt). " +
+        "Opt-in via Foreman Settings → Scan MCP tools; returns the cached result of the last scan — no live network call.")]
+    public static object ListMcpToolFindings()
+    {
+        var state = _state ?? new ForemanState();
+        if (state.GetMcpToolScan is null)
+            return new { enabled = false, message = "MCP tool scanning is off. Enable it in Foreman Settings → Scan MCP tools." };
+
+        var (findings, summary) = state.GetMcpToolScan();
+        return new
+        {
+            enabled  = true,
+            summary,
+            findings = findings.Select(f => new { f.Server, f.Tool, f.Signal, f.Excerpt }).ToArray(),
+        };
+    }
+
     private static bool TargetMatches(string[] targets, string targetHarnessId) =>
         targets.Length == 0 ||
         targets.Any(t => t == "*" || string.Equals(t, targetHarnessId, StringComparison.OrdinalIgnoreCase));

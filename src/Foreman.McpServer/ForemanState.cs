@@ -29,6 +29,7 @@ public sealed class ForemanState : IEventSink
     public Func<int, ProcessRecord?>?              FindHarnessAncestorByPid { get; set; }
     public Func<int>?                              GetMcpSessionCount { get; set; }
     public Func<IEnumerable<McpServerEntry>>?      GetMcpInventory    { get; set; }
+    public Func<(IReadOnlyList<McpToolFinding> Findings, string Summary)>? GetMcpToolScan { get; set; }
 
     /// <summary>Resets behavioral metrics for a specific harness ID. Returns false if not found.</summary>
     public Action<string>? ResetBehaviorProfile { get; set; }
