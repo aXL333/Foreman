@@ -69,12 +69,29 @@ public static class ForemanMcpTools
         };
     }
 
-    [McpServerTool, Description("Marks a Foreman alert as acknowledged, suppressing further notifications for it.")]
+    [McpServerTool, Description(
+        "Marks a Foreman alert as acknowledged, suppressing further notifications for it. " +
+        "High and Critical alerts cannot be acknowledged over MCP — the operator must acknowledge " +
+        "those in the Foreman UI so a harness cannot silence a serious alert about itself.")]
     public static object AcknowledgeAlert(
         [Description("The alert ID to acknowledge")] string alertId,
         [Description("Optional reason for acknowledgement")] string? reason = null)
     {
         var state = _state ?? new ForemanState();
+
+        var evt = state.GetAlert(alertId);
+        if (evt is null)
+            return new { acknowledged = false, reason = "No active alert with that ID." };
+
+        // Operator stays authoritative over serious alerts: a (possibly adversarial) harness
+        // must not be able to flip the tray green by acking its own High/Critical alert.
+        if (evt.Severity >= ForemanSeverity.High)
+            return new
+            {
+                acknowledged = false,
+                reason = "High/Critical alerts must be acknowledged by the operator in the Foreman UI, not over MCP.",
+            };
+
         var acknowledged = state.AcknowledgeAlert(alertId);
         return new { acknowledged, reason };
     }
@@ -131,9 +148,11 @@ public static class ForemanMcpTools
             _                        => "allow_once",
         };
 
-        var source = processId is int pid && pid > 0
-            ? $"MCP.ReportSuspiciousCommand (pid {pid})"
-            : "MCP.ReportSuspiciousCommand";
+        // MCP-originated alerts never designate a kill target. A harness must not be able to point
+        // Foreman's one-click Kill action at any PID — not an arbitrary one, and not even a tracked
+        // sibling's. Profile attribution still uses the processId parameter above; the published
+        // event deliberately carries no kill PID (0).
+        const string source = "MCP.ReportSuspiciousCommand";
 
         // Log the check through the normal event bus so tray state, behavior metrics,
         // MCP state, and connected clients all see the same alert stream.
@@ -147,7 +166,7 @@ public static class ForemanMcpTools
             match.RuleName,
             match.Description,
             match.Guidance,
-            processId ?? 0
+            0
         ));
 
         if (profileBlocked)
@@ -156,7 +175,7 @@ public static class ForemanMcpTools
                 DateTimeOffset.UtcNow,
                 "MCP.ReportSuspiciousCommand",
                 $"[{profile!.Name}] CommandBlocked: [{match.RuleId}] {match.RuleName}",
-                processId ?? 0,
+                0,
                 profile.Name,
                 "CommandBlocked",
                 $"Blocked rule [{match.RuleId}] {match.RuleName}: {match.Description}"));
@@ -209,14 +228,7 @@ public static class ForemanMcpTools
         [Description("The harness ID to reset, e.g. 'claude-code', 'codex', or 'proc:node'")] string harnessId)
     {
         var state = _state ?? new ForemanState();
-        state.ResetBehaviorProfile?.Invoke(harnessId);
-
-        // log the reset as an info event so it's visible in the log window
-        EventBus.Instance.Publish(new InfoEvent(
-            DateTimeOffset.UtcNow,
-            "MCP.ResetBehaviorMetrics",
-            $"Behavior metrics reset for '{harnessId}' via MCP tool call."));
-
+        ResetAndAnnounce(state, harnessId, "MCP.ResetBehaviorMetrics");
         return new { reset = true, harnessId };
     }
 
@@ -237,12 +249,7 @@ public static class ForemanMcpTools
         if (resetMetrics && harnessId is not null)
         {
             var state = _state ?? new ForemanState();
-            state.ResetBehaviorProfile?.Invoke(harnessId);
-
-            EventBus.Instance.Publish(new InfoEvent(
-                DateTimeOffset.UtcNow,
-                "MCP.TaskStart",
-                $"Behavior metrics reset for '{harnessId}' at task boundary."));
+            ResetAndAnnounce(state, harnessId, "MCP.TaskStart");
         }
 
         return new
@@ -313,6 +320,15 @@ public static class ForemanMcpTools
             defaultProfileName = integration.DefaultProfileName,
             setupHint = integration.SetupHint.Replace("{port}", port.ToString(), StringComparison.Ordinal),
             mcpConfigSnippet = integration.McpConfigSnippet.Replace("{port}", port.ToString(), StringComparison.Ordinal),
+            authentication = new
+            {
+                required = true,
+                scheme = "Bearer",
+                header = "Authorization: Bearer <token>",
+                tokenFile = @"%LocalAppData%\Foreman\mcp.token",
+                setupFile = @"%LocalAppData%\Foreman\mcp-setup.txt",
+                note = "The /mcp endpoint requires this token in an Authorization header; copy it from the token file into your client config. /health stays open.",
+            },
             note = "Pass harnessId or processId to Foreman MCP tools so permissions and process listings can be scoped to this harness.",
         };
     }
@@ -428,6 +444,33 @@ public static class ForemanMcpTools
                     ? "No auditor preference matched this target/severity."
                     : "Auditor selected from user preference list.",
         };
+    }
+
+    // Resets a harness's escalation and announces it. If the harness had actually escalated
+    // (above Watch), the reset is published as a visible Medium alert rather than a silent Info,
+    // so a (possibly adversarial) harness cannot quietly wipe a real escalation to self-exonerate.
+    private static void ResetAndAnnounce(ForemanState state, string harnessId, string source)
+    {
+        var priorLevel = state.GetEscalationLevel(harnessId);
+        state.ResetBehaviorProfile?.Invoke(harnessId);
+
+        if (priorLevel is { } lvl && lvl > EscalationLevel.Watch)
+        {
+            // High, so it cannot be self-acknowledged over MCP (the ack gate refuses >= High) and
+            // it can't be silently cleared — wiping a real escalation should make noise.
+            EventBus.Instance.Publish(new MonitoringNoticeEvent(
+                DateTimeOffset.UtcNow,
+                ForemanSeverity.High,
+                source,
+                $"Behavior metrics for '{harnessId}' were reset from {lvl.ToString().ToUpperInvariant()} via MCP — escalation history cleared."));
+        }
+        else
+        {
+            EventBus.Instance.Publish(new InfoEvent(
+                DateTimeOffset.UtcNow,
+                source,
+                $"Behavior metrics reset for '{harnessId}' via MCP."));
+        }
     }
 
     private static bool TargetMatches(string[] targets, string targetHarnessId) =>

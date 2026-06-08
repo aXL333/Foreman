@@ -142,28 +142,45 @@ public sealed class ProcessTreeTracker
             string.Equals(FindHarnessTypeAncestor(r.Pid)?.HarnessType, harnessType, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// Terminates every tracked process in the matching harness tree.
-    /// Silently ignores processes that have already exited.
+    /// Terminates every tracked process in the matching harness tree. Driven by the LIVE tree
+    /// (not a stale alert), so each record is current by construction. Skips Foreman itself and
+    /// the low system PIDs. Silently ignores processes that have already exited.
     /// </summary>
     public void KillHarness(string harnessType)
     {
         foreach (var rec in GetTreeByHarnessType(harnessType).ToList())
         {
+            if (!IsSafeTarget(rec.Pid)) continue;
             try
             {
                 using var proc = Process.GetProcessById(rec.Pid);
                 proc.Kill(entireProcessTree: rec.IsHarness);
+                SetState(rec.Pid, ProcessState.Terminated);
             }
             catch { /* already exited or access denied */ }
         }
     }
 
     /// <summary>
-    /// Terminates a specific process and any descendants Windows can associate with it.
-    /// Returns false when the process has already exited or Windows denies access.
+    /// Terminates the process identified by <paramref name="pid"/> AND <paramref name="expectedStartTime"/>
+    /// (the WMI CreationDate captured on the originating alert), plus its descendant tree.
+    ///
+    /// Identity is proven by comparing the alert's captured start time against the CURRENTLY-tracked
+    /// record for that PID — both are the same WMI source, so equal means "same process" and a recycled
+    /// PID (which has a different CreationDate, or is no longer tracked) is refused. This is what makes a
+    /// stale alert safe: it cannot kill an unrelated process that later inherited the PID.
+    ///
+    /// Returns false when the target can't be verified, isn't tracked, has exited, or access is denied.
     /// </summary>
-    public bool KillProcess(int pid)
+    public bool KillProcess(int pid, DateTimeOffset? expectedStartTime)
     {
+        if (!IsSafeTarget(pid)) return false;
+        if (expectedStartTime is not { } expected) return false;   // no identity pin → never kill a bare PID
+
+        var rec = GetByPid(pid);
+        if (rec is null) return false;                             // not tracked (exited or never seen)
+        if (Math.Abs((rec.StartTime - expected).TotalSeconds) > 1) return false;  // PID reused since the alert
+
         try
         {
             using var proc = Process.GetProcessById(pid);
@@ -176,4 +193,7 @@ public sealed class ProcessTreeTracker
             return false;
         }
     }
+
+    // We never terminate Foreman itself or the low system PIDs (0 = Idle, 4 = System).
+    private static bool IsSafeTarget(int pid) => pid > 4 && pid != Environment.ProcessId;
 }

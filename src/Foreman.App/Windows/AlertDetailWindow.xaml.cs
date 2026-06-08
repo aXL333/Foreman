@@ -3,6 +3,7 @@ using Foreman.Core.Events;
 using Foreman.Core.Models;
 using Foreman.Core.Settings;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Media;
 
@@ -40,8 +41,11 @@ public partial class AlertDetailWindow : Window
     /// <summary>Wired up by App.xaml.cs. Provides the user-defined LLM triage routing preferences.</summary>
     public static Func<LlmTriageSettings>? GetLlmTriageSettings { get; set; }
 
-    /// <summary>Wired up by App.xaml.cs. Terminates the specific alert target process.</summary>
-    public static Func<int, bool>? KillProcessByPid { get; set; }
+    /// <summary>
+    /// Wired up by App.xaml.cs. Terminates the alert target. The second argument is the target's
+    /// captured start time (identity pin) so the kill is refused if the PID was since recycled.
+    /// </summary>
+    public static Func<int, DateTimeOffset?, bool>? KillProcessByPid { get; set; }
 
     private AlertDetailWindow(ForemanEvent evt)
     {
@@ -143,7 +147,7 @@ public partial class AlertDetailWindow : Window
 
         if (result != MessageBoxResult.Yes) return;
 
-        var killed = KillProcessByPid?.Invoke(pid.Value) ?? false;
+        var killed = KillProcessByPid?.Invoke(pid.Value, _event.ProcessStartTime) ?? false;
         if (!killed)
         {
             EventBus.Instance.Publish(new InfoEvent(
@@ -210,8 +214,8 @@ public partial class AlertDetailWindow : Window
         if (!string.IsNullOrWhiteSpace(commandLine))
         {
             sb.AppendLine();
-            sb.AppendLine("Command line");
-            sb.AppendLine(commandLine);
+            sb.AppendLine("Command line (potential secrets masked)");
+            sb.AppendLine(RedactSecrets(commandLine));
         }
 
         AppendEventSpecificDetails(sb);
@@ -414,6 +418,27 @@ public partial class AlertDetailWindow : Window
             return cmd.CommandLine;
 
         return string.IsNullOrWhiteSpace(liveProcess?.CommandLine) ? null : liveProcess.CommandLine;
+    }
+
+    // The audit prompt is copied to the clipboard for pasting into a (possibly third-party) LLM.
+    // A flagged command line can carry credentials, so mask the obvious ones first. Best-effort
+    // hygiene, not a guarantee — the prompt header notes that masking was applied.
+    private static readonly Regex[] _secretPatterns =
+    [
+        new(@"(?i)\b(authorization:\s*(?:[a-z]+\s+)?)\S+", RegexOptions.Compiled),  // Bearer / token / Basic / none
+        new(@"(?i)(--(?:password|token|api[-_]?key|secret|access[-_]?key|client[-_]?secret)[ =]+)\S+", RegexOptions.Compiled),
+        new(@"(?i)\b((?:password|passwd|pwd|token|api[-_]?key|apikey|secret|access[-_]?key)\s*=\s*)[^\s;,""']+", RegexOptions.Compiled),
+        new(@"\bAKIA[0-9A-Z]{16}\b", RegexOptions.Compiled),
+    ];
+
+    private static string RedactSecrets(string commandLine)
+    {
+        var s = commandLine;
+        s = _secretPatterns[0].Replace(s, "$1***");
+        s = _secretPatterns[1].Replace(s, "$1***");
+        s = _secretPatterns[2].Replace(s, "$1***");
+        s = _secretPatterns[3].Replace(s, "***");
+        return s;
     }
 
     private static string? ResolveHarnessFromProcess(int pid)

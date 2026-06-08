@@ -4,7 +4,7 @@
   "description": "Default profile for T3 Code control-plane processes",
   "processMatch": {
     "executableNames": ["t3 code.exe", "t3code.exe", "t3-code.exe"],
-    "commandLineContains": ["pingdotgg/t3code", "t3code/apps/desktop", "t3code\\apps\\desktop", "t3 code/resources/app", "t3 code\\resources\\app", "t3.codes"],
+    "commandLineContains": ["pingdotgg/t3code", "t3code/apps/desktop", "t3code\\apps\\desktop", "t3 code/resources/app", "t3 code\\resources\\app"],
     "parentExecutableNames": []
   },
   "fileSystem": {

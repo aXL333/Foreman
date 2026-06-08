@@ -41,7 +41,7 @@
     "notifyOnOrphan": true,
     "notifyOnViolation": true,
     "suppressDuplicatesWindowMinutes": 5,
-    "trustedHookPathMarkers": [".opencode\\", ".opencode/"],
+    "trustedHookPathMarkers": [".opencode\\hooks\\", ".opencode/hooks/"],
     "launcherSuppressedRuleIds": []
   }
 }

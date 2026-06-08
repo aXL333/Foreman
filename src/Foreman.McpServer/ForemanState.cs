@@ -56,6 +56,16 @@ public sealed class ForemanState : IEventSink
         return true;
     }
 
+    /// <summary>Returns the tracked alert with the given id, or null. Used to gate ack by severity.</summary>
+    public ForemanEvent? GetAlert(string alertId) =>
+        _alertById.TryGetValue(alertId, out var evt) ? evt : null;
+
+    /// <summary>Current escalation level for a harness, or null if it has no profile yet.</summary>
+    public EscalationLevel? GetEscalationLevel(string harnessId) =>
+        GetBehaviorProfiles?.Invoke()
+            .FirstOrDefault(p => string.Equals(p.HarnessId, harnessId, StringComparison.OrdinalIgnoreCase))
+            ?.CurrentLevel;
+
     public IEnumerable<ProcessRecord> GetProcesses(bool includeChildren) =>
         GetProcessSnapshot?.Invoke()
             .Where(p => includeChildren || p.IsHarness) ?? [];

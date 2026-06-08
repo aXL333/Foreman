@@ -68,7 +68,7 @@ public static class HarnessIntegrationRegistry
             "opencode",
             "OpenCode",
             "opencode-default",
-            [@".opencode\", ".opencode/"],
+            [@".opencode\hooks\", ".opencode/hooks/"],
             [],
             "Add Foreman's HTTP MCP endpoint to opencode.json under the mcp object.",
             """

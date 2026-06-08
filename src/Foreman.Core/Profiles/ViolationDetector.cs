@@ -73,7 +73,7 @@ public sealed class ViolationDetector
             profileName,
             violationType,
             detail
-        ));
+        ) { ProcessStartTime = record.StartTime });
     }
 
     private HarnessProfile? ResolveProfile(ProcessRecord record)

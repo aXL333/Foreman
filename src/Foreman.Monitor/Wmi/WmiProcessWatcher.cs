@@ -125,7 +125,7 @@ public sealed class WmiProcessWatcher : IDisposable
                         match.Description,
                         match.Guidance,
                         record.Pid
-                    ));
+                    ) { ProcessStartTime = record.StartTime });
                 });
             }
         }
@@ -157,7 +157,7 @@ public sealed class WmiProcessWatcher : IDisposable
                     pid,
                     name,
                     orphan.UptimeMinutes
-                ));
+                ) { ProcessStartTime = orphan.StartTime });
             }
 
             // flag nonzero exits from harness-classified processes

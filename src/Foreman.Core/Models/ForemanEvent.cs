@@ -11,6 +11,13 @@ public abstract record ForemanEvent(
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N")[..12];
     public bool Acknowledged { get; set; }
+
+    /// <summary>
+    /// WMI CreationDate of the process this alert is about, when known. Pins the kill target's
+    /// identity: a later Kill validates this against the currently-tracked record for the PID,
+    /// so a recycled PID (which has a different CreationDate) is refused rather than killed.
+    /// </summary>
+    public DateTimeOffset? ProcessStartTime { get; init; }
 }
 
 public sealed record CommandAlertEvent(
@@ -78,6 +85,18 @@ public sealed record InfoEvent(
     string Source,
     string Message
 ) : ForemanEvent(Timestamp, ForemanSeverity.Info, Source, Message);
+
+/// <summary>
+/// A monitoring-control action worth surfacing at a chosen severity — e.g. an MCP-initiated
+/// behavior-metrics reset that wiped a real escalation. Publishing these as a visible alert
+/// (rather than a silent Info) means such actions cannot be used to quietly self-exonerate.
+/// </summary>
+public sealed record MonitoringNoticeEvent(
+    DateTimeOffset Timestamp,
+    ForemanSeverity Severity,
+    string Source,
+    string Message
+) : ForemanEvent(Timestamp, Severity, Source, Message);
 
 /// <summary>
 /// Published by BehaviorTracker whenever a harness crosses an escalation threshold.

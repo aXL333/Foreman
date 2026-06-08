@@ -111,7 +111,7 @@ public sealed class HangDetector
             ownerPid,
             ownerType,
             ownerName
-        ));
+        ) { ProcessStartTime = record.StartTime });
     }
 
     /// <summary>Drops the per-process alert state when a process exits (called by the poller/watcher).</summary>
