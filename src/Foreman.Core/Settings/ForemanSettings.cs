@@ -18,6 +18,15 @@ public sealed class ForemanSettings
     /// app (UI, MCP server, kill action) stays at medium integrity. Toggling it on prompts UAC.
     /// </summary>
     public bool RunElevated { get; set; } = false;
+
+    /// <summary>
+    /// Opt-in (Tier 1): periodically connect to the HTTP/SSE MCP servers your harnesses use,
+    /// enumerate their tools, and scan the tool names + descriptions for prompt-injection / data-
+    /// exfil text. Off by default — this is the only feature that makes outbound network connections
+    /// to third-party servers. stdio servers are never launched (we don't spawn what we're auditing).
+    /// </summary>
+    public bool ScanMcpTools { get; set; } = false;
+
     public string ProfilesDirectory { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Foreman", "profiles");
 

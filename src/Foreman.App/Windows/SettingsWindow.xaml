@@ -99,6 +99,12 @@
                 <TextBlock TextWrapping="Wrap" FontSize="10"
                            Foreground="{StaticResource TextMutedBrush}" Margin="22,2,0,0"
                            Text="Launches a small, elevated ETW helper (one UAC prompt) that meters per-process network throughput — byte counts per process only, NOT packet contents or destinations (no deep packet inspection). Only the helper runs elevated; Foreman's UI, MCP server, and kill action stay unprivileged. Leave off if you don't need the Net column." />
+                <CheckBox x:Name="ScanMcpToolsCheck"
+                          Content="Scan MCP tool descriptions for injection (opt-in)"
+                          Margin="0,12,0,0" />
+                <TextBlock TextWrapping="Wrap" FontSize="10"
+                           Foreground="{StaticResource TextMutedBrush}" Margin="22,2,0,0"
+                           Text="Periodically connects to the HTTP/SSE MCP servers your harnesses use, lists their tools, and flags tool names or descriptions that read like prompt injection or data exfil (e.g. 'ignore previous instructions', 'email the .env'). This is the only feature that makes outbound connections to third-party servers; stdio servers are never launched. Leave off unless you want this network probe." />
             </StackPanel>
 
             <!-- ── Escalation Thresholds ─────────────────────────────────────── -->
