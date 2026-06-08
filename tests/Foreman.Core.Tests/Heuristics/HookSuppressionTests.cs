@@ -30,4 +30,15 @@ public sealed class HookSuppressionTests : IClassFixture<PatternLibraryFixture>
         Assert.NotNull(match);
         Assert.Equal("win-002", match.RuleId);
     }
+
+    [Fact]
+    public void EncodedCommand_IsNotSuppressed_EvenWithHookPathPresent()
+    {
+        // A base64 -EncodedCommand payload is a primary obfuscation signal. Suppression must
+        // NOT be evadable by planting a ".claude\hooks\" substring in the command line.
+        var cmd = @"powershell -NoProfile -EncodedCommand SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAKQA= -from C:\Users\me\.claude\hooks\x";
+        var match = _analyzer.Analyze(cmd, "powershell.exe");
+        Assert.NotNull(match);
+        Assert.Equal("win-001", match.RuleId);
+    }
 }
