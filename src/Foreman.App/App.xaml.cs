@@ -83,6 +83,7 @@ public partial class App : Application
         _sidecar = new ElevatedSidecarController();
         if (settings.RunElevated) _sidecar.Start();
         _tray.GetNetRate = pid => _sidecar.GetRate(pid);
+        _tray.GetNetCaptureActive = () => _sidecar?.IsConnected ?? false;
         // SettingsWindow already persists the flag; this just starts/stops the sidecar
         // (enabling raises the UAC prompt for the sidecar).
         _tray.ApplyRunElevated = on =>

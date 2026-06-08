@@ -49,6 +49,9 @@ public sealed class TrayController : IEventSink, IDisposable
     /// <summary>Injected from App — applies the Run Elevated toggle (persist + start/stop the sidecar).</summary>
     public Action<bool>?                                      ApplyRunElevated      { get; set; }
 
+    /// <summary>Injected from App — true when the elevated network sidecar is connected and feeding.</summary>
+    public Func<bool>?                                        GetNetCaptureActive   { get; set; }
+
     public TrayController(ForemanSettings settings, EventBus bus)
     {
         _settings = settings;
@@ -235,6 +238,10 @@ public sealed class TrayController : IEventSink, IDisposable
             w.OpenProcessMonitorRequested = () => OpenProcessMonitorWindow();
             w.OpenHarnessesRequested = () => OpenHarnessesWindow();
             w.OpenBehaviorMetricsRequested = () => OpenBehaviorMetricsWindow();
+            w.OpenSettingsRequested = () => OpenSettingsWindow();
+            w.GetMcpClientCount = GetMcpClientCount;
+            w.GetNetCaptureConnected = GetNetCaptureActive;
+            w.McpPort = _settings.McpPort;
             w.Show();
             _dashboardWindow = w;  // assign only after Show() succeeds
         }

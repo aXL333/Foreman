@@ -28,6 +28,12 @@ public partial class DashboardWindow : Window, IEventSink
     public Action? OpenProcessMonitorRequested { get; set; }
     public Action? OpenHarnessesRequested { get; set; }
     public Action? OpenBehaviorMetricsRequested { get; set; }
+    public Action? OpenSettingsRequested { get; set; }
+
+    /// <summary>Live status providers for the strip/footer, wired by TrayController.</summary>
+    public Func<int>?  GetMcpClientCount      { get; set; }
+    public Func<bool>? GetNetCaptureConnected { get; set; }
+    public int         McpPort                { get; set; } = 54321;
 
     public DashboardWindow(Func<IEnumerable<BehaviorProfile>> getProfiles)
     {
@@ -104,10 +110,14 @@ public partial class DashboardWindow : Window, IEventSink
             ? RelativeSummary(last.Timestamp)
             : "none";
 
+        McpClientsLabel.Text = (GetMcpClientCount?.Invoke() ?? 0).ToString(CultureInfo.InvariantCulture);
+        NetCaptureLabel.Text = GetNetCaptureConnected?.Invoke() == true ? "On" : "Off";
+
         // ── Footer ────────────────────────────────────────────────────────────
+        var meta = $"Foreman v{Version}  ·  up {Uptime()}  ·  MCP :{McpPort}";
         FooterText.Text = relevant.Count == 0
-            ? ""
-            : $"{relevant.Count} recent event{(relevant.Count == 1 ? "" : "s")}  ·  click any row for detail";
+            ? meta
+            : $"{meta}  ·  {relevant.Count} recent event{(relevant.Count == 1 ? "" : "s")}  ·  click any row for detail";
 
         // ── Show / hide empty state ───────────────────────────────────────────
         var hasItems = relevant.Count > 0;
@@ -137,6 +147,25 @@ public partial class DashboardWindow : Window, IEventSink
 
     private void OpenBehaviorMetricsClick(object sender, RoutedEventArgs e) =>
         OpenBehaviorMetricsRequested?.Invoke();
+
+    private void OpenSettingsClick(object sender, RoutedEventArgs e) =>
+        OpenSettingsRequested?.Invoke();
+
+    private static string Version =>
+        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1";
+
+    private static string Uptime()
+    {
+        try
+        {
+            var up = DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime;
+            if (up.TotalMinutes < 1) return "<1m";
+            if (up.TotalHours   < 1) return $"{(int)up.TotalMinutes}m";
+            if (up.TotalDays    < 1) return $"{(int)up.TotalHours}h {up.Minutes:D2}m";
+            return $"{(int)up.TotalDays}d {up.Hours}h";
+        }
+        catch { return "?"; }
+    }
 
     protected override void OnClosed(EventArgs e)
     {
