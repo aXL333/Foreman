@@ -48,6 +48,8 @@ Auto-classified by process name and command line:
 | --- | --- | --- |
 | `claude-code` | Claude Code | Anthropic |
 | `codex` | Codex CLI | OpenAI |
+| `t3-code` | T3 Code | T3 Tools |
+| `opencode` | OpenCode | Anomaly |
 | `gemini-cli` | Gemini CLI | Google |
 | `amazon-q` | Amazon Q Developer | Amazon / AWS |
 | `aider` | Aider | Paul Gauthier |
@@ -159,7 +161,7 @@ Settings are stored at `%LocalAppData%\Foreman\settings.json` and editable from 
 | `DisabledHarnesses` | `[]` | agents to detect but not alert on |
 | `LlmTriage` | enabled | auditor preference routing for one harness/API to review another |
 
-Per-session escalation thresholds (medium-alert count, high-alert count, unique-rule count, category count, total-alert count, and the set of emergency-tier rule IDs) live in the same file. So does the LLM triage preference list: each auditor entry can target specific harness IDs, require a minimum severity, and point either to another running harness or to an API endpoint. Defaults are in [`src/Foreman.Core/Settings/ForemanSettings.cs`](src/Foreman.Core/Settings/ForemanSettings.cs).
+Per-session escalation thresholds (medium-alert count, high-alert count, unique-rule count, category count, total-alert count, and the set of emergency-tier rule IDs) live in the same file. So does the LLM triage preference list: each auditor entry can target specific harness IDs, require a minimum severity, and point either to another running harness or to an API endpoint. The built-in audit routes let Claude Code, Codex and OpenCode review each other, and let those agents review T3 Code as a control plane. Defaults are in [`src/Foreman.Core/Settings/ForemanSettings.cs`](src/Foreman.Core/Settings/ForemanSettings.cs).
 
 ## Project status & roadmap
 

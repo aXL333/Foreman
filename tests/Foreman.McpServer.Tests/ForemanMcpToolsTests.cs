@@ -100,6 +100,22 @@ public sealed class ForemanMcpToolsTests : IDisposable
         Assert.Equal(2, validation.RootElement.GetProperty("mcpSessions").GetInt32());
     }
 
+    [Theory]
+    [InlineData("t3-code", "t3-code-default")]
+    [InlineData("opencode", "opencode-default")]
+    public void IntegrationInstructions_IncludeNewHarnesses(string harnessId, string profileName)
+    {
+        using var instructions = ToJson(ForemanMcpTools.GetIntegrationInstructions(harnessId));
+        Assert.Equal(harnessId, instructions.RootElement.GetProperty("harnessId").GetString());
+        Assert.Equal(profileName, instructions.RootElement.GetProperty("defaultProfileName").GetString());
+        Assert.Contains("12345", instructions.RootElement.GetProperty("mcpConfigSnippet").GetString());
+
+        using var validation = ToJson(ForemanMcpTools.ValidateHarnessIntegration(harnessId));
+        Assert.True(validation.RootElement.GetProperty("knownHarness").GetBoolean());
+        Assert.True(validation.RootElement.GetProperty("integrationMetadata").GetBoolean());
+        Assert.True(validation.RootElement.GetProperty("profileLoaded").GetBoolean());
+    }
+
     [Fact]
     public void AuditRouting_SelectsPreferredNonSelfAuditor()
     {
@@ -108,6 +124,16 @@ public sealed class ForemanMcpToolsTests : IDisposable
         var selected = route.RootElement.GetProperty("selected");
         Assert.Equal("codex", selected.GetProperty("AuditorId").GetString());
         Assert.Equal("harness", selected.GetProperty("AuditorType").GetString());
+        Assert.True(selected.GetProperty("available").GetBoolean());
+    }
+
+    [Fact]
+    public void AuditRouting_CanRouteT3CodeToAvailableAgentAuditor()
+    {
+        using var route = ToJson(ForemanMcpTools.GetAuditRoute("t3-code", severity: "High", requireAvailable: true));
+
+        var selected = route.RootElement.GetProperty("selected");
+        Assert.Equal("codex", selected.GetProperty("AuditorId").GetString());
         Assert.True(selected.GetProperty("available").GetBoolean());
     }
 

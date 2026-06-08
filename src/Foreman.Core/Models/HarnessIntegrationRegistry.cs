@@ -47,6 +47,42 @@ public static class HarnessIntegrationRegistry
               }
             }
             """),
+        new(
+            "t3-code",
+            "T3 Code",
+            "t3-code-default",
+            [],
+            [],
+            "Add Foreman's MCP endpoint to the underlying agent configured in T3 Code; monitor T3 Code itself as the control plane.",
+            """
+            {
+              "mcpServers": {
+                "foreman": {
+                  "type": "http",
+                  "url": "http://localhost:{port}/mcp"
+                }
+              }
+            }
+            """),
+        new(
+            "opencode",
+            "OpenCode",
+            "opencode-default",
+            [@".opencode\", ".opencode/"],
+            [],
+            "Add Foreman's HTTP MCP endpoint to opencode.json under the mcp object.",
+            """
+            {
+              "$schema": "https://opencode.ai/config.json",
+              "mcp": {
+                "foreman": {
+                  "type": "remote",
+                  "url": "http://localhost:{port}/mcp",
+                  "enabled": true
+                }
+              }
+            }
+            """),
     ];
 
     public static HarnessIntegration? Get(string harnessId) =>
