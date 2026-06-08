@@ -25,6 +25,11 @@ public partial class ProcessMonitorWindow : Window
 
     private void Refresh()
     {
+        // Guard: the IsChecked="True" filter checkboxes raise Checked during InitializeComponent(),
+        // before sibling elements (HideTerminatedCheck / ProcessList / CountLabel) are created. Don't
+        // run until the window is actually loaded. (Same XAML-init hazard as LogWindow's filters.)
+        if (!IsLoaded) return;
+
         var records = _getSnapshot().ToList();
 
         bool harnessOnly    = HarnessOnlyCheck.IsChecked   == true;
