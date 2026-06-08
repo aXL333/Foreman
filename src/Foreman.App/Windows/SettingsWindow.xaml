@@ -98,7 +98,7 @@
                           Margin="0,12,0,0" />
                 <TextBlock TextWrapping="Wrap" FontSize="10"
                            Foreground="{StaticResource TextMutedBrush}" Margin="22,2,0,0"
-                           Text="Launches a small, capture-only ETW helper as administrator (one UAC prompt) so the Process Monitor can show per-process network throughput. Only the helper runs elevated — Foreman's UI, MCP server, and kill action stay unprivileged. Leave off if you don't need the Net column." />
+                           Text="Launches a small, elevated ETW helper (one UAC prompt) that meters per-process network throughput — byte counts per process only, NOT packet contents or destinations (no deep packet inspection). Only the helper runs elevated; Foreman's UI, MCP server, and kill action stay unprivileged. Leave off if you don't need the Net column." />
             </StackPanel>
 
             <!-- ── Escalation Thresholds ─────────────────────────────────────── -->

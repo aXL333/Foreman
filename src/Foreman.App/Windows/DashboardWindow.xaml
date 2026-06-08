@@ -249,7 +249,7 @@
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource TextPrimaryBrush}"
                                    TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="NET CAPTURE"
+                        <TextBlock Text="NET METERING"
                                    Style="{StaticResource MetricCaption}" />
                     </StackPanel>
                 </Border>
