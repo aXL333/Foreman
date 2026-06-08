@@ -17,6 +17,7 @@ public partial class App : Application
     private TrayController? _tray;
     private MonitorService? _monitor;
     private McpServerHost? _mcpHost;
+    private ElevatedSidecarController? _sidecar;
     private CancellationTokenSource? _cts;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -77,6 +78,18 @@ public partial class App : Application
             SettingsStore.Save(settings);
         };
 
+        // Optional elevated, capture-only ETW network sidecar. Only this sidecar runs elevated;
+        // the app stays at medium IL. Off unless the user opts in (Settings → Run elevated).
+        _sidecar = new ElevatedSidecarController();
+        if (settings.RunElevated) _sidecar.Start();
+        _tray.GetNetRate = pid => _sidecar.GetRate(pid);
+        // SettingsWindow already persists the flag; this just starts/stops the sidecar
+        // (enabling raises the UAC prompt for the sidecar).
+        _tray.ApplyRunElevated = on =>
+        {
+            if (on) _sidecar.Start(); else _sidecar.Stop();
+        };
+
         // start MCP on a background thread so we don't block the WPF message pump
         _ = _mcpHost.StartAsync(_cts.Token);
 
@@ -97,6 +110,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _cts?.Cancel();
+        _sidecar?.Dispose();
         _mcpHost?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(3));
         _monitor?.Dispose();
         _tray?.Dispose();

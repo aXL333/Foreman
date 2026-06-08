@@ -93,6 +93,12 @@
                 <CheckBox x:Name="NotifyCriticalCheck" Content="Notify on critical command" />
                 <CheckBox x:Name="MonitorAllCheck" Content="Monitor all processes (not just harness children)"
                           Margin="0,12,0,4" />
+                <CheckBox x:Name="RunElevatedCheck"
+                          Content="Run elevated for per-process Network (opt-in)"
+                          Margin="0,12,0,0" />
+                <TextBlock TextWrapping="Wrap" FontSize="10"
+                           Foreground="{StaticResource TextMutedBrush}" Margin="22,2,0,0"
+                           Text="Launches a small, capture-only ETW helper as administrator (one UAC prompt) so the Process Monitor can show per-process network throughput. Only the helper runs elevated — Foreman's UI, MCP server, and kill action stay unprivileged. Leave off if you don't need the Net column." />
             </StackPanel>
 
             <!-- ── Escalation Thresholds ─────────────────────────────────────── -->

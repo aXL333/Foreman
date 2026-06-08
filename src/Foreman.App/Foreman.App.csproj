@@ -13,7 +13,20 @@
     <ProjectReference Include="..\Foreman.Core\Foreman.Core.csproj" />
     <ProjectReference Include="..\Foreman.Monitor\Foreman.Monitor.csproj" />
     <ProjectReference Include="..\Foreman.McpServer\Foreman.McpServer.csproj" />
+    <!-- Build the elevated sidecar first; its full output is copied next to the app (below).
+         No assembly reference — it is a separate process, launched on demand. -->
+    <ProjectReference Include="..\Foreman.EtwSidecar\Foreman.EtwSidecar.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <!-- Stage the sidecar under <app>\sidecar so ElevatedSidecarController can launch it. -->
+  <Target Name="CopyEtwSidecar" AfterTargets="Build">
+    <ItemGroup>
+      <_SidecarOutput Include="$(MSBuildThisFileDirectory)..\Foreman.EtwSidecar\bin\$(Configuration)\$(TargetFramework)\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_SidecarOutput)"
+          DestinationFiles="@(_SidecarOutput->'$(OutDir)sidecar\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

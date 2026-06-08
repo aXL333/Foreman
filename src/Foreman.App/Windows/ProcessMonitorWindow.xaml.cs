@@ -12,13 +12,15 @@ namespace Foreman.App.Windows;
 public partial class ProcessMonitorWindow : Window
 {
     private readonly Func<IEnumerable<ProcessRecord>> _getSnapshot;
+    private readonly Func<int, double?>? _getNetRate;
     private readonly DispatcherTimer _timer;
     private readonly ResourceSampler _sampler = new();
     private ProcessMonitorVm? _selected;
 
-    public ProcessMonitorWindow(Func<IEnumerable<ProcessRecord>> getSnapshot)
+    public ProcessMonitorWindow(Func<IEnumerable<ProcessRecord>> getSnapshot, Func<int, double?>? getNetRate = null)
     {
         _getSnapshot = getSnapshot;
+        _getNetRate  = getNetRate;
         InitializeComponent();
 
         Loaded += (_, _) => Refresh();
@@ -55,7 +57,8 @@ public partial class ProcessMonitorWindow : Window
             .Select(p => new ProcessMonitorVm(
                 p,
                 metrics.TryGetValue(p.Pid, out var m) ? m : null,
-                FileHashCache.GetOrCompute(p.ExecutablePath)))
+                FileHashCache.GetOrCompute(p.ExecutablePath),
+                _getNetRate?.Invoke(p.Pid)))
             .ToList();
 
         ProcessList.ItemsSource = filtered;
@@ -185,15 +188,16 @@ public sealed class ProcessMonitorVm
     public string MemLabel { get; }
     public string IoLabel  { get; }
     public string GpuLabel { get; }
-    public string NetLabel { get; } = "n/a";   // per-process net needs Run Elevated (ETW)
+    public string NetLabel { get; }   // live bytes/sec from the elevated sidecar, else "n/a"
 
     // ── Executable identity ──────────────────────────────────────────────────
     public string  ExecutablePath { get; }
     public string? HashFull       { get; }   // full SHA-256 (for VirusTotal / copy), null if unknown
     public string  HashLabel      { get; }   // short form for the column
 
-    public ProcessMonitorVm(ProcessRecord p, ResourceSampler.Metrics? metrics, string? hash)
+    public ProcessMonitorVm(ProcessRecord p, ResourceSampler.Metrics? metrics, string? hash, double? netRate)
     {
+        NetLabel        = netRate is { } n ? FormatRate(n) : "n/a";
         Pid             = p.Pid;
         Name            = p.Name;
         CommandLineFull = p.CommandLine;
