@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <Product>Foreman</Product>
+    <Company>Foreman</Company>
+    <Authors>user</Authors>
+    <Version>0.1.0</Version>
+    <Description>A Windows watchdog for AI coding agents. Flags dangerous shell commands, catches hung and orphaned harness child processes, and exposes an MCP bridge so agents can query their own oversight.</Description>
+    <Copyright>Copyright (c) 2026 user</Copyright>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/aXL333/Foreman</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/aXL333/Foreman</PackageProjectUrl>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+</Project>

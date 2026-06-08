@@ -1,0 +1,127 @@
+{
+  "$schema": "https://foreman.local/pattern-schema/v1",
+  "category": "dangerous-commands",
+  "version": "2.0",
+  "rules": [
+    {
+      "id": "del-001",
+      "name": "recursive delete of critical unix paths",
+      "severity": "critical",
+      "description": "rm -rf targeting the filesystem root or critical system directories such as /etc, /usr, /bin, or $HOME. This will immediately and irreversibly destroy the operating system or all user files.",
+      "guidance": "Stop the harness immediately. Check whether any files have already been deleted. If the system is still booting, restore from a known-good snapshot or backup. Never run rm -rf / or rm -rf ~ without an explicit user prompt — no legitimate coding task requires it.",
+      "pattern": "\\brm\\s+(-[a-z]*f[a-z]*r[a-z]*|-[a-z]*r[a-z]*f[a-z]*)\\s+(--|/|~|\\$HOME|/etc|/usr|/bin|/lib|/var|\\*)",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "del-002",
+      "name": "recursive delete of critical windows paths",
+      "severity": "critical",
+      "description": "rmdir /s or rd /s targeting Windows system folders (C:\\Windows, System32, Program Files, %systemroot%). Permanently destroys the Windows installation.",
+      "guidance": "Terminate the harness. Verify Windows system directories are intact (Windows Explorer → C:\\Windows). If files are missing, use Windows Recovery Environment to restore from WinRE or a system image backup.",
+      "pattern": "\\b(rmdir|rd)\\s+/s\\s+.*?(c:\\\\(windows|system32|program files)|%systemroot%|%windir%)",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "del-003",
+      "name": "Windows format disk",
+      "severity": "critical",
+      "description": "format command targeting a drive letter. Wipes the entire drive, destroying all files and the filesystem structure.",
+      "guidance": "Immediately terminate the harness. Do NOT reboot until you verify whether format ran to completion — a partial format may be recoverable with disk recovery tools. Restore from backup if data loss occurred.",
+      "pattern": "\\bformat\\s+[a-z]:\\s*(/fs:|/q|/p:|$)",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "del-004",
+      "name": "diskpart destructive commands",
+      "severity": "critical",
+      "description": "diskpart clean, delete partition, or delete disk. These commands destroy the partition table or wipe all data on the specified disk/volume.",
+      "guidance": "Terminate the harness immediately. diskpart destructive operations are instant and irreversible from within Windows. Check Disk Management to see partition state. Use recovery tools (TestDisk) only if the operation ran partially.",
+      "pattern": "\\bdiskpart\\b.*\\b(clean|delete (partition|disk|volume))",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "del-005",
+      "name": "recursive delete of home or project via wildcard",
+      "severity": "high",
+      "description": "rm -rf with a broad wildcard or relative path (~/*, ./*) — likely to destroy all user project files or the entire home directory.",
+      "guidance": "Check what was deleted before taking further action. If files are missing, check git history, recycle bin, or file recovery tools. Consider rate-limiting the harness's filesystem write permissions via Foreman profiles.",
+      "pattern": "\\brm\\s+-[a-z]*r[a-z]*f[a-z]*\\s+[~./]",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": ["cleanup_script_allowed"]
+    },
+    {
+      "id": "del-006",
+      "name": "PowerShell Remove-Item recursive force on broad paths",
+      "severity": "critical",
+      "description": "Remove-Item -Recurse -Force targeting system directories, drive roots, or home paths in PowerShell. Equivalent to rm -rf in severity.",
+      "guidance": "Terminate the harness. Verify that the target path was not a system or project directory. Restore from backup if important files were deleted. PowerShell does not move to Recycle Bin with Remove-Item.",
+      "pattern": "Remove-Item\\s+(-Recurse|-Force|-rf|/[rf]).*\\s+(-Force|-Recurse)\\s+.*(C:\\\\|%|\\$env:|~|\\$HOME|/)",
+      "platforms": ["powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "del-007",
+      "name": "dd overwrite disk or partition",
+      "severity": "critical",
+      "description": "dd with if=/dev/zero, /dev/urandom, or /dev/random targeting /dev/sd* or /dev/nvme* — overwrites raw disk blocks, destroying the filesystem and all data.",
+      "guidance": "Terminate immediately — dd operates at block level and each written block is permanent. Do NOT restart the machine. Attempt recovery with ddrescue or professional forensic tools if interrupted early enough. Otherwise restore from backup.",
+      "pattern": "\\bdd\\b[^\\n]*(if=/dev/(zero|urandom|random))[^\\n]*(of=/dev/[sh]d|of=/dev/nvme|of=/dev/disk)",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "del-008",
+      "name": "mkfs destructive format on device",
+      "severity": "critical",
+      "description": "mkfs.* called on a real block device (/dev/sd*, /dev/nvme*) rather than a loop device. This destroys the filesystem on the target drive.",
+      "guidance": "Terminate the harness. Check whether the mkfs command ran to completion — a partial operation may be recoverable. Mount the device read-only with a live OS and attempt recovery. Restore from backup if data is critical.",
+      "pattern": "\\bmkfs(\\.\\w+)?\\s+/dev/([sh]d[a-z]|nvme\\d)",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "del-009",
+      "name": "truncate or shred files",
+      "severity": "medium",
+      "description": "truncate -s 0 or shred targeting source files or config files — intentionally zeroes out or securely deletes file content, potentially destroying code or credentials.",
+      "guidance": "Review which files were targeted. Shred is designed to be unrecoverable on spinning disks. Check git history for source files. For config files, restore from a backed-up settings file or re-generate them.",
+      "pattern": "\\btruncate\\s+-s\\s+0\\s+[^\\n]{4,}|\\bshred\\s+-[uzn]",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": ["log_cleanup_allowed"]
+    },
+    {
+      "id": "del-010",
+      "name": "wipe MBR or boot sector",
+      "severity": "critical",
+      "description": "dd targeting the first 512 bytes of /dev/sda (the MBR/boot sector) renders the disk unbootable and destroys the partition table.",
+      "guidance": "Terminate immediately. The MBR can be restored with 'bootrec /fixmbr' from Windows Recovery, or 'grub-install' / 'fdisk' from a Linux live USB. Partition data may be recoverable with testdisk if the partition table was intact.",
+      "pattern": "\\bdd\\b[^\\n]*of=/dev/(sda|sdb|hda|disk0)\\b[^\\n]*bs=446",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "del-011",
+      "name": "PowerShell delete all files recursively without path restriction",
+      "severity": "high",
+      "description": "Get-ChildItem piped to Remove-Item or ForEach Remove-Item without a specific safe path — risks mass-deleting project or system files.",
+      "guidance": "Check the CWD and pipeline arguments to determine what was actually deleted. Restore from git or backup if source files were affected. Consider restricting the harness to its project directory via Foreman profiles.",
+      "pattern": "Get-ChildItem\\s+.*\\|[^\\n]*(Remove-Item|ri\\s+-)",
+      "platforms": ["powershell"],
+      "falsePositiveTags": ["cleanup_script_allowed"]
+    },
+    {
+      "id": "del-012",
+      "name": "git clean with force on untracked files",
+      "severity": "medium",
+      "description": "git clean -fdx removes ALL untracked files and directories, including ignored build artifacts, .env files, and local secrets. Frequently accidentally removes credentials or local configuration.",
+      "guidance": "Check whether any credential files, .env files, or important untracked assets were removed. git clean is permanent — files are not in git history unless they were previously committed. Re-generate any deleted secrets.",
+      "pattern": "\\bgit\\s+clean\\s+-[a-z]*f[a-z]*d[a-z]*x[a-z]*|-[a-z]*f[a-z]*x[a-z]*d[a-z]*",
+      "platforms": ["bash", "sh", "wsl", "cmd", "powershell"],
+      "falsePositiveTags": ["ci_allowed"]
+    }
+  ]
+}

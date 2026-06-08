@@ -1,0 +1,171 @@
+<Window x:Class="Foreman.App.Windows.BehaviorMetricsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Foreman — Behavior Metrics"
+        Width="820" Height="480"
+        MinWidth="600" MinHeight="320"
+        Background="{StaticResource BackgroundBrush}"
+        Foreground="{StaticResource TextPrimaryBrush}"
+        FontFamily="Segoe UI, Arial">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="8"    />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="8"    />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="8"    />
+            <RowDefinition Height="*"    />
+            <RowDefinition Height="10"   />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="BEHAVIOR METRICS" FontSize="12" FontWeight="Bold"
+                       Foreground="{StaticResource AccentBrush}" />
+            <TextBlock Foreground="{StaticResource TextMutedBrush}" FontSize="11" Margin="0,3,0,0"
+                       Text="Per-harness session metrics. Levels escalate automatically; reset to clear a session's history." />
+        </StackPanel>
+
+        <!-- Threshold summary bar -->
+        <Border Grid.Row="2" Background="#FF1A1C24" CornerRadius="4" Padding="12,7">
+            <WrapPanel Orientation="Horizontal">
+                <TextBlock Text="Alert thresholds: " FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+                <TextBlock x:Name="ThresholdSummary" FontSize="11"
+                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+            </WrapPanel>
+        </Border>
+
+        <!-- Column headers -->
+        <Grid Grid.Row="4" Margin="4,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="80"  />   <!-- level badge -->
+                <ColumnDefinition Width="160" />   <!-- harness name -->
+                <ColumnDefinition Width="70"  />   <!-- alerts -->
+                <ColumnDefinition Width="65"  />   <!-- rules -->
+                <ColumnDefinition Width="*"   />   <!-- categories -->
+                <ColumnDefinition Width="80"  />   <!-- session -->
+                <ColumnDefinition Width="90"  />   <!-- buttons -->
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Level"     FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" />
+            <TextBlock Grid.Column="1" Text="Harness"   FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" />
+            <TextBlock Grid.Column="2" Text="Alerts"    FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" />
+            <TextBlock Grid.Column="3" Text="Rules"     FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" />
+            <TextBlock Grid.Column="4" Text="Categories" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" />
+            <TextBlock Grid.Column="5" Text="Session"   FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" />
+        </Grid>
+
+        <!-- Metrics list -->
+        <ScrollViewer Grid.Row="6" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="MetricsList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border BorderBrush="#FF1E2028" BorderThickness="0,0,0,1" Padding="4,7">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="80"  />
+                                    <ColumnDefinition Width="160" />
+                                    <ColumnDefinition Width="70"  />
+                                    <ColumnDefinition Width="65"  />
+                                    <ColumnDefinition Width="*"   />
+                                    <ColumnDefinition Width="80"  />
+                                    <ColumnDefinition Width="90"  />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Level badge -->
+                                <Border Grid.Column="0" CornerRadius="3" Padding="6,2"
+                                        Background="{Binding LevelBackground}"
+                                        HorizontalAlignment="Left" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding LevelLabel}"
+                                               Foreground="{Binding LevelForeground}"
+                                               FontSize="10" FontWeight="Bold" />
+                                </Border>
+
+                                <!-- Harness name -->
+                                <TextBlock Grid.Column="1" Text="{Binding DisplayName}"
+                                           FontWeight="SemiBold" FontSize="12"
+                                           VerticalAlignment="Center" Margin="6,0,0,0" />
+
+                                <!-- Alert count / threshold -->
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding TotalAlerts}"
+                                               Foreground="{Binding AlertCountBrush}"
+                                               FontWeight="Bold" FontSize="12" />
+                                    <TextBlock Text="{Binding AlertThresholdLabel}"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="11" Margin="1,0,0,0" />
+                                </StackPanel>
+
+                                <!-- Unique rules -->
+                                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding UniqueRules}"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="12" />
+                                    <TextBlock Text="{Binding RulesThresholdLabel}"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="11" Margin="1,0,0,0" />
+                                </StackPanel>
+
+                                <!-- Category badges -->
+                                <ItemsControl Grid.Column="4" ItemsSource="{Binding CategoryBadges}"
+                                              VerticalAlignment="Center">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{Binding Bg}" CornerRadius="2"
+                                                    Padding="4,1" Margin="2,0,0,0">
+                                                <TextBlock Text="{Binding Label}"
+                                                           Foreground="{Binding Fg}"
+                                                           FontSize="9" FontWeight="Bold" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- Session duration -->
+                                <TextBlock Grid.Column="5" Text="{Binding SessionDuration}"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontFamily="Consolas, Courier New" FontSize="11"
+                                           VerticalAlignment="Center" />
+
+                                <!-- Reset + Kill buttons -->
+                                <StackPanel Grid.Column="6" Orientation="Horizontal"
+                                            VerticalAlignment="Center" HorizontalAlignment="Right">
+                                    <Button Content="Reset" Tag="{Binding}" Click="ResetClick"
+                                            Background="Transparent" Foreground="{StaticResource TextMutedBrush}"
+                                            BorderBrush="#FF303540" Padding="6,2" FontSize="10"
+                                            Margin="0,0,4,0" Cursor="Hand" />
+                                    <Button Content="Kill" Tag="{Binding}" Click="KillClick"
+                                            Background="#FF3A1010" Foreground="#FFDD6666"
+                                            BorderBrush="#FF5A2020" Padding="6,2" FontSize="10"
+                                            Cursor="Hand"
+                                            IsEnabled="{Binding CanKill}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Bottom bar -->
+        <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right">
+            <TextBlock x:Name="RefreshLabel" Text="Live — refreshes every 2s"
+                       Foreground="{StaticResource TextMutedBrush}" FontSize="10"
+                       VerticalAlignment="Center" Margin="0,0,16,0" />
+            <Button Content="Reset All" Click="ResetAllClick"
+                    Background="#FF1E2028" Foreground="{StaticResource TextPrimaryBrush}"
+                    BorderBrush="#FF303540" Padding="12,6" Margin="0,0,8,0" />
+            <Button Content="Close" Click="CloseClick"
+                    Background="{StaticResource AccentBrush}"
+                    Foreground="#FF0D0F12" FontWeight="Bold" Padding="16,6" />
+        </StackPanel>
+    </Grid>
+</Window>

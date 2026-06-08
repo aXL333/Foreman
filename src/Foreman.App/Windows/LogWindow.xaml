@@ -1,0 +1,185 @@
+<Window x:Class="Foreman.App.Windows.LogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Foreman — Event Log"
+        Width="960" Height="560"
+        MinWidth="600" MinHeight="300"
+        Background="{StaticResource BackgroundBrush}"
+        Foreground="{StaticResource TextPrimaryBrush}"
+        FontFamily="Consolas, Courier New">
+
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#FF1E2028" />
+            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+            <Setter Property="BorderBrush" Value="#FF303540" />
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#FF1E2028" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="#FF303540" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />   <!-- toolbar -->
+            <RowDefinition Height="*"    />   <!-- event list -->
+            <RowDefinition Height="Auto" />   <!-- status bar -->
+        </Grid.RowDefinitions>
+
+        <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
+        <Border Grid.Row="0" Background="#FF14161E" BorderBrush="#FF1E2028"
+                BorderThickness="0,0,0,1" Padding="8,6,8,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="FOREMAN EVENT LOG" FontSize="11" FontWeight="Bold"
+                           Foreground="{StaticResource AccentBrush}"
+                           VerticalAlignment="Center" Margin="0,0,16,0"
+                           FontFamily="Segoe UI, Arial" />
+
+                <!-- search box -->
+                <Border Grid.Column="1" Background="#FF1E2028" BorderBrush="#FF303540"
+                        BorderThickness="1" CornerRadius="2" Margin="0,0,8,0">
+                    <Grid>
+                        <TextBox x:Name="SearchBox"
+                                 Background="Transparent"
+                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                 BorderThickness="0"
+                                 Padding="8,3"
+                                 FontSize="11"
+                                 FontFamily="Segoe UI, Arial"
+                                 VerticalContentAlignment="Center"
+                                 TextChanged="SearchBox_TextChanged" />
+                        <TextBlock x:Name="SearchPlaceholder"
+                                   Text="filter by source or message…"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   FontSize="11"
+                                   FontFamily="Segoe UI, Arial"
+                                   IsHitTestVisible="False"
+                                   VerticalAlignment="Center"
+                                   Margin="9,0,0,0" />
+                    </Grid>
+                </Border>
+
+                <!-- severity filter -->
+                <ComboBox x:Name="SeverityFilter" Grid.Column="2"
+                          SelectedIndex="0"
+                          SelectionChanged="SeverityFilter_SelectionChanged"
+                          Width="115" FontFamily="Segoe UI, Arial">
+                    <ComboBoxItem Content="All levels" />
+                    <ComboBoxItem Content="Info +" />
+                    <ComboBoxItem Content="Low +" />
+                    <ComboBoxItem Content="Medium +" />
+                    <ComboBoxItem Content="High +" />
+                    <ComboBoxItem Content="Critical" />
+                </ComboBox>
+
+                <StackPanel Grid.Column="4" Orientation="Horizontal">
+                    <Button Content="Export…" Click="ExportClick" Margin="0,0,6,0" />
+                    <Button Content="Clear"   Click="ClearClick" />
+                </StackPanel>
+
+                <CheckBox x:Name="AutoScrollCheck" Grid.Column="6"
+                          Content="Auto-scroll" IsChecked="True"
+                          Foreground="{StaticResource TextPrimaryBrush}"
+                          FontSize="11"
+                          FontFamily="Segoe UI, Arial"
+                          VerticalAlignment="Center"
+                          Checked="AutoScrollCheck_Changed"
+                          Unchecked="AutoScrollCheck_Changed" />
+            </Grid>
+        </Border>
+
+        <!-- ── Event list ────────────────────────────────────────────────────── -->
+        <!-- double-click any row to see the full alert detail window -->
+        <ListView x:Name="EventList" Grid.Row="1"
+                  Background="{StaticResource SurfaceBrush}"
+                  Foreground="{StaticResource TextPrimaryBrush}"
+                  BorderThickness="0"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                  MouseDoubleClick="EventList_MouseDoubleClick">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Time" Width="100"
+                        DisplayMemberBinding="{Binding Timestamp}" />
+                    <GridViewColumn Header="Sev" Width="70">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding SeverityLabel}"
+                                           Foreground="{Binding SeverityBrush}"
+                                           FontWeight="Bold" />
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn Header="Source" Width="180"
+                        DisplayMemberBinding="{Binding Source}" />
+                    <GridViewColumn Header="Message" Width="520"
+                        DisplayMemberBinding="{Binding Message}" />
+                </GridView>
+            </ListView.View>
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="Padding" Value="0,2,0,2" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                    <Style.Triggers>
+                        <!-- Row colour by severity level — DataTrigger is the correct WPF idiom
+                             for per-row dynamic values; {Binding} directly in a Setter can cause
+                             issues with shared frozen styles when items are recycled.  -->
+                        <DataTrigger Binding="{Binding SeverityLabel}" Value="CRITICAL">
+                            <Setter Property="Foreground" Value="#FFFFCCCC" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SeverityLabel}" Value="HIGH">
+                            <Setter Property="Foreground" Value="#FFFFDDAA" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SeverityLabel}" Value="MEDIUM">
+                            <Setter Property="Foreground" Value="#FFF0E8C8" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SeverityLabel}" Value="LOW">
+                            <Setter Property="Foreground" Value="#FFE2E8F0" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SeverityLabel}" Value="INFO">
+                            <Setter Property="Foreground" Value="#FF7A8090" />
+                        </DataTrigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#FF22253A" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#FF1A1C28" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </ListView.ItemContainerStyle>
+        </ListView>
+
+        <!-- ── Status bar ────────────────────────────────────────────────────── -->
+        <Border Grid.Row="2" Background="#FF14161E" BorderBrush="#FF1E2028"
+                BorderThickness="0,1,0,0" Padding="8,4">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="StatusLabel"
+                           FontFamily="Segoe UI, Arial" FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+                <TextBlock Text="  ·  double-click to inspect"
+                           FontFamily="Segoe UI, Arial" FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

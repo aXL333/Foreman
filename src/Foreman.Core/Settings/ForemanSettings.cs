@@ -1,0 +1,77 @@
+namespace Foreman.Core.Settings;
+
+public sealed class ForemanSettings
+{
+    public int McpPort { get; set; } = 54321;
+    public int HangThresholdMinutes { get; set; } = 10;
+    public int HookJamThresholdMinutes { get; set; } = 5;
+    public int IoPollerIntervalSeconds { get; set; } = 30;
+    public int AlertSuppressWindowMinutes { get; set; } = 5;
+    public bool NotifyOnHang { get; set; } = true;
+    public bool NotifyOnOrphan { get; set; } = true;
+    public bool NotifyOnCriticalCommand { get; set; } = true;
+    public bool MonitorAllProcesses { get; set; } = false; // false = harness children only
+    public string ProfilesDirectory { get; set; } =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Foreman", "profiles");
+
+    /// <summary>
+    /// Harness IDs (matching KnownHarnesses.All[].Id, or "custom:exename.exe") that
+    /// should not be monitored.  Foreman still detects them for status display purposes
+    /// but will not emit hang/orphan/permission alerts for disabled harnesses.
+    /// </summary>
+    public HashSet<string> DisabledHarnesses { get; set; } = [];
+
+    /// <summary>
+    /// User-added process exe names to treat as harnesses (e.g. "myagent.exe").
+    /// Stored lower-case; the classifier matches them case-insensitively.
+    /// </summary>
+    public List<string> CustomHarnessExes { get; set; } = [];
+
+    // ── Escalation thresholds ────────────────────────────────────────────────
+
+    /// <summary>Medium-severity alerts before escalating to Alert level (per harness session).</summary>
+    public int AlertLevelMediumCount { get; set; } = 3;
+
+    /// <summary>High-severity alerts before escalating to Alarm level.</summary>
+    public int AlarmLevelHighCount { get; set; } = 2;
+
+    /// <summary>Unique rule IDs fired before escalating to Alarm level.</summary>
+    public int AlarmLevelUniqueRules { get; set; } = 5;
+
+    /// <summary>Distinct threat categories touched before escalating to Alarm level.</summary>
+    public int AlarmLevelCategories { get; set; } = 3;
+
+    /// <summary>Total alerts from one harness before escalating to Emergency level.</summary>
+    public int EmergencyLevelTotalAlerts { get; set; } = 10;
+
+    /// <summary>
+    /// Rule IDs that unconditionally trigger Emergency escalation (no count threshold).
+    /// Covers the most dangerous single-action patterns: credential dumping, ransomware
+    /// indicators, remote code execution, UAC bypass, and administrator escalation.
+    /// </summary>
+    public string[] EmergencyRuleIds { get; set; } =
+    [
+        // Credential theft
+        "cred-004",   // mimikatz
+        "cred-005",   // LSASS dump
+        "cred-018",   // DCSync / AD attack
+        "cred-019",   // lateral movement (CrackMapExec / Impacket)
+
+        // Ransomware indicators
+        "win-009",    // VSS shadow copy deletion (windows-specific)
+        "priv-003",   // VSS deletion (privilege-escalation duplicate pattern)
+
+        // Remote code execution
+        "net-001",    // curl|bash
+        "net-002",    // PowerShell IEX from web
+        "net-005",    // Python reverse shell
+        "net-008",    // mshta remote HTA
+        "net-009",    // regsvr32 Squiblydoo
+
+        // Privilege escalation
+        "priv-002",   // add user to Administrators group
+        "priv-004",   // disable Windows Defender
+        "priv-008",   // UAC bypass via fodhelper/eventvwr
+        "priv-010",   // modify sudoers (NOPASSWD)
+    ];
+}

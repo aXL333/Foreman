@@ -1,0 +1,61 @@
+{
+  "$schema": "https://foreman.local/pattern-schema/v1",
+  "category": "network-exfil",
+  "version": "1.0",
+  "rules": [
+    {
+      "id": "net-001",
+      "name": "curl pipe to shell",
+      "severity": "critical",
+      "description": "Fetch from web and pipe directly into a shell interpreter",
+      "pattern": "\\b(curl|wget)\\b[^|\\n]*\\|\\s*(bash|sh|zsh|fish|dash|ksh|ash|busybox)",
+      "platforms": ["bash", "sh", "wsl", "cmd"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-002",
+      "name": "PowerShell IEX from web",
+      "severity": "critical",
+      "description": "Invoke-Expression or iex combining Invoke-WebRequest or webclient download",
+      "pattern": "(?:iex|Invoke-Expression)\\s*\\(\\s*(?:iwr|Invoke-WebRequest|\\(New-Object\\s+Net\\.WebClient\\)\\.DownloadString)",
+      "platforms": ["powershell", "cmd"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-003",
+      "name": "env dump to network",
+      "severity": "high",
+      "description": "Piping environment variables to a network tool suggests credential exfiltration",
+      "pattern": "\\b(env|printenv|set)\\b[^\\n]*\\|[^\\n]*(curl|wget|nc |ncat|netcat|\\btelnet\\b)",
+      "platforms": ["bash", "sh", "wsl", "cmd"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-004",
+      "name": "netcat listener or connect",
+      "severity": "medium",
+      "description": "Netcat used for listening or connecting (common in reverse shells)",
+      "pattern": "\\b(nc|ncat|netcat)\\s+(-[a-z]*l[a-z]*|-[a-z]*e[a-z]*|.*\\b(bash|sh|cmd)\\b)",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": ["pentest_allowed"]
+    },
+    {
+      "id": "net-005",
+      "name": "Python reverse shell one-liner",
+      "severity": "critical",
+      "description": "Python one-liner connecting to external socket — common reverse shell pattern",
+      "pattern": "python[23]?\\s+-c\\s+['\"].*socket.*connect.*os\\.dup2|python[23]?\\s+-c\\s+['\"].*__import__.*socket.*connect",
+      "platforms": ["bash", "sh", "wsl", "cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-006",
+      "name": "PowerShell download cradle",
+      "severity": "high",
+      "description": "WebClient or BitsTransfer downloading and running a file",
+      "pattern": "\\bNew-Object\\s+Net\\.WebClient[^\\n]*\\.(?:DownloadFile|DownloadString|DownloadData)\\s*\\(",
+      "platforms": ["powershell"],
+      "falsePositiveTags": ["installer_allowed"]
+    }
+  ]
+}

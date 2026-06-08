@@ -1,0 +1,137 @@
+{
+  "$schema": "https://foreman.local/pattern-schema/v1",
+  "category": "privilege-escalation",
+  "version": "2.0",
+  "rules": [
+    {
+      "id": "priv-001",
+      "name": "add local user account",
+      "severity": "high",
+      "description": "Creating a new user account via 'net user /add', useradd, or adduser. A new account can be used as a backdoor if the harness was compromised or is acting maliciously.",
+      "guidance": "Run 'net user' or 'cat /etc/passwd' to see recently added accounts. Remove any unexpected accounts. If this was intentional, review whether the new account has more privileges than necessary.",
+      "pattern": "\\bnet\\s+user\\s+\\S+\\s+\\S+\\s+/add\\b|\\buseradd\\b|\\badduser\\b",
+      "platforms": ["cmd", "powershell", "bash", "sh", "wsl"],
+      "falsePositiveTags": ["user_mgmt_allowed"]
+    },
+    {
+      "id": "priv-002",
+      "name": "add user to administrators group",
+      "severity": "critical",
+      "description": "Adding an account to the Administrators, sudo, or wheel group gives that account full system control — the highest privilege escalation possible on the local machine.",
+      "guidance": "Immediately run 'net localgroup administrators' or 'groups <user>' to verify which accounts are now administrators. Remove any unexpected members. This is almost never a legitimate coding action.",
+      "pattern": "\\bnet\\s+localgroup\\s+administrators\\s+.*\\s+/add\\b|\\busermod\\s+-[aA][Gg]\\s+(sudo|wheel|admin)\\b",
+      "platforms": ["cmd", "powershell", "bash", "wsl"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "priv-003",
+      "name": "shadow copy deletion",
+      "severity": "critical",
+      "description": "Deleting VSS shadow copies via vssadmin, wmic, or bcdedit — the signature action of ransomware before encrypting files. Eliminates all Windows system restore points.",
+      "guidance": "Check immediately whether your files are intact. If they appear encrypted or renamed, you may be experiencing an active ransomware attack. Disconnect from the network, do not reboot, and restore from external offline backups.",
+      "pattern": "\\bvssadmin\\s+delete\\s+shadows\\b|\\bwmic\\s+shadowcopy\\s+delete\\b|\\bbcdedit\\s+/set\\s+\\{default\\}\\s+recoveryenabled\\s+no\\b",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "priv-004",
+      "name": "disable Windows Defender",
+      "severity": "critical",
+      "description": "Disabling Windows Defender real-time protection or the firewall — removes your primary malware defense, allowing subsequent malicious activity to go undetected.",
+      "guidance": "Re-enable Defender immediately via Windows Security settings or: 'Set-MpPreference -DisableRealtimeMonitoring $false'. Run a full scan. Review what actions the harness took while Defender was disabled.",
+      "pattern": "Set-MpPreference\\s+-DisableRealtimeMonitoring\\s+\\$?true|netsh\\s+advfirewall\\s+set\\s+allprofiles\\s+state\\s+off|sc\\s+(stop|delete|config)\\s+(WinDefend|MsMpEng|Sense)\\b",
+      "platforms": ["powershell", "cmd"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "priv-005",
+      "name": "create scheduled task as SYSTEM",
+      "severity": "high",
+      "description": "Registering a scheduled task to run as NT AUTHORITY\\SYSTEM — the highest privilege on Windows. Used to achieve persistence with full system access.",
+      "guidance": "Open Task Scheduler and review recently created tasks. Delete any unexpected tasks. A harness should never need to create scheduled tasks unless you explicitly asked it to automate something.",
+      "pattern": "schtasks\\.exe\\s+/create\\b[^\\n]*/ru\\s+system\\b|Register-ScheduledTask\\b[^\\n]*-RunLevel\\s+Highest\\b",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": ["sysadmin_allowed"]
+    },
+    {
+      "id": "priv-006",
+      "name": "install new Windows service",
+      "severity": "medium",
+      "description": "sc.exe create or New-Service adding a persistent service that starts automatically. Services run at SYSTEM or elevated privilege and survive reboots.",
+      "guidance": "Run 'sc query type= all' or 'Get-Service' to review recently added services. A new service that runs unexpected code is a persistence mechanism. Delete with 'sc delete <name>' if unexpected.",
+      "pattern": "\\bsc\\.exe\\s+create\\s+\\S+|\\bNew-Service\\s+-Name\\b",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": ["sysadmin_allowed"]
+    },
+    {
+      "id": "priv-007",
+      "name": "token impersonation or privilege manipulation",
+      "severity": "high",
+      "description": "Calling AdjustTokenPrivileges, SeDebugPrivilege, or SeTcbPrivilege via direct API/P-Invoke — enables a process to debug or impersonate other processes at the system level.",
+      "guidance": "Token manipulation is almost exclusively used for privilege escalation or LSASS credential dumping. Review what the harness did after enabling these privileges. Treat any LSASS access as a credential compromise.",
+      "pattern": "AdjustTokenPrivileges|SeDebugPrivilege|SeTcbPrivilege|SeImpersonatePrivilege|whoami\\s+/priv",
+      "platforms": ["cmd", "powershell", "bash"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "priv-008",
+      "name": "UAC bypass via fodhelper or eventvwr",
+      "severity": "critical",
+      "description": "Exploiting fodhelper.exe or eventvwr.exe via registry hijacking to run code at elevated integrity without a UAC prompt. These are well-known UAC bypass techniques.",
+      "guidance": "Check the registry key HKCU:\\Software\\Classes\\ms-settings\\shell\\open\\command — if it exists and contains unexpected content, remove it. Review what elevated code was run without your UAC approval.",
+      "pattern": "fodhelper\\.exe|eventvwr\\.exe|\\bHKCU:\\\\Software\\\\Classes\\\\ms-settings\\\\shell\\b",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "priv-009",
+      "name": "chmod 777 on sensitive paths",
+      "severity": "medium",
+      "description": "chmod 777 or chmod a+rwx on SSH keys, shell config files, or sudo configuration — makes these files world-writable, enabling any user or process to modify them.",
+      "guidance": "Revert permissions: 'chmod 600 ~/.ssh/*' for SSH keys, 'chmod 644 ~/.bashrc' for shell configs, 'chmod 440' for sudoers. World-writable SSH keys are ignored by openssh for security.",
+      "pattern": "\\bchmod\\s+(777|a\\+rwx|o\\+w)\\s+.*(\\.ssh|sudoers|\\/etc\\/|authorized_keys|id_rsa|known_hosts)",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "priv-010",
+      "name": "modify sudoers or sudo group",
+      "severity": "critical",
+      "description": "Writing to /etc/sudoers or /etc/sudoers.d/ to grant sudo access without password (NOPASSWD) — gives a user or process permanent root access without authentication.",
+      "guidance": "Run 'sudo visudo' to review sudoers entries. Remove any NOPASSWD entries that weren't explicitly added by you. An unexpected NOPASSWD entry is a backdoor.",
+      "pattern": "\\btee\\s+/etc/sudoers\\b|\\becho\\b[^\\n]*/etc/sudoers|\\bNOPASSWD\\b.*\\bALL\\b",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "priv-011",
+      "name": "registry persistence via Run key",
+      "severity": "high",
+      "description": "Writing to HKCU or HKLM Run/RunOnce registry keys — adds a program that executes automatically at every Windows login. A common malware persistence mechanism.",
+      "guidance": "Open Registry Editor and review HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run and HKCU\\...\\Run. Remove any unexpected entries. Use Autoruns (Sysinternals) for a comprehensive view of all startup locations.",
+      "pattern": "\\b(reg\\s+add|Set-ItemProperty|New-ItemProperty)\\b[^\\n]*(HKLM|HKCU)[^\\n]*(\\\\Run\\\\|\\\\RunOnce\\\\)",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": ["autostart_allowed"]
+    },
+    {
+      "id": "priv-012",
+      "name": "WMI event subscription for persistence",
+      "severity": "high",
+      "description": "Creating WMI event subscriptions (EventFilter + EventConsumer + FilterToConsumerBinding) — an advanced persistence mechanism that survives reboots and is invisible to autoruns tools.",
+      "guidance": "Run: Get-WMIObject -Namespace root/subscription -Class __EventFilter | Format-List Name,Query to list WMI subscriptions. Remove unexpected bindings. WMI persistence is extremely stealthy — consider a full malware scan.",
+      "pattern": "__EventFilter|CommandLineEventConsumer|FilterToConsumerBinding|ActiveScriptEventConsumer",
+      "platforms": ["powershell", "cmd"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "priv-013",
+      "name": "enable guest account or null session",
+      "severity": "high",
+      "description": "Enabling the built-in Guest account or configuring null session shares — allows unauthenticated access to the machine from the network.",
+      "guidance": "Run 'net user guest' to check the guest account status. Disable with 'net user guest /active:no'. Review SMB share permissions via 'net share'. Null sessions and guest access are security vulnerabilities on any network-connected machine.",
+      "pattern": "\\bnet\\s+user\\s+guest\\s+/active:yes\\b|\\bnet\\s+user\\s+guest\\b[^\\n]*/active:yes",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    }
+  ]
+}

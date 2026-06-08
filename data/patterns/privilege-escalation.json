@@ -1,0 +1,61 @@
+{
+  "$schema": "https://foreman.local/pattern-schema/v1",
+  "category": "privilege-escalation",
+  "version": "1.0",
+  "rules": [
+    {
+      "id": "priv-001",
+      "name": "add local user account",
+      "severity": "high",
+      "description": "Creating a new user account via net user or useradd",
+      "pattern": "\\bnet\\s+user\\s+\\S+\\s+\\S+\\s+/add\\b|\\buseradd\\b|\\badduser\\b",
+      "platforms": ["cmd", "powershell", "bash", "sh", "wsl"],
+      "falsePositiveTags": ["user_mgmt_allowed"]
+    },
+    {
+      "id": "priv-002",
+      "name": "add user to administrators group",
+      "severity": "critical",
+      "description": "Adding an account to the Administrators or sudo group",
+      "pattern": "\\bnet\\s+localgroup\\s+administrators\\s+.*\\s+/add\\b|\\busermod\\s+-[aA][Gg]\\s+(sudo|wheel|admin)\\b",
+      "platforms": ["cmd", "powershell", "bash", "wsl"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "priv-003",
+      "name": "shadow copy deletion",
+      "severity": "critical",
+      "description": "Deleting VSS shadow copies — key ransomware indicator",
+      "pattern": "\\bvssadmin\\s+delete\\s+shadows\\b|\\bwmic\\s+shadowcopy\\s+delete\\b|\\bbcdedit\\s+/set\\s+\\{default\\}\\s+recoveryenabled\\s+no\\b",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "priv-004",
+      "name": "disable Windows Defender",
+      "severity": "critical",
+      "description": "Disabling real-time protection or the entire antivirus",
+      "pattern": "Set-MpPreference\\s+-DisableRealtimeMonitoring\\s+\\$?true|netsh\\s+advfirewall\\s+set\\s+allprofiles\\s+state\\s+off|sc\\s+(stop|delete|config)\\s+(WinDefend|MsMpEng|Sense)\\b",
+      "platforms": ["powershell", "cmd"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "priv-005",
+      "name": "create scheduled task as SYSTEM",
+      "severity": "high",
+      "description": "Registering a scheduled task to run as SYSTEM — persistence mechanism",
+      "pattern": "schtasks\\.exe\\s+/create\\b[^\\n]*/ru\\s+system\\b|Register-ScheduledTask\\b[^\\n]*-RunLevel\\s+Highest\\b",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": ["sysadmin_allowed"]
+    },
+    {
+      "id": "priv-006",
+      "name": "install new Windows service",
+      "severity": "medium",
+      "description": "sc.exe create or New-Service adding a persistent service",
+      "pattern": "\\bsc\\.exe\\s+create\\s+\\S+|\\bNew-Service\\s+-Name\\b",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": ["sysadmin_allowed"]
+    }
+  ]
+}
