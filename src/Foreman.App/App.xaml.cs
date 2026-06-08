@@ -1,0 +1,98 @@
+using Foreman.App.Tray;
+using Foreman.App.Windows;
+using Foreman.Core.Events;
+using Foreman.Core.Heuristics;
+using Foreman.Core.Models;
+using Foreman.Core.Settings;
+using Foreman.McpServer;
+using Foreman.Monitor;
+using System.Threading;
+using System.Windows;
+
+namespace Foreman.App;
+
+public partial class App : Application
+{
+    private static readonly Mutex _singleInstance = new(true, "ForemanSingleInstanceMutex");
+    private TrayController? _tray;
+    private MonitorService? _monitor;
+    private McpServerHost? _mcpHost;
+    private CancellationTokenSource? _cts;
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        if (!_singleInstance.WaitOne(0, false))
+        {
+            MessageBox.Show("Foreman is already running.", "Foreman", MessageBoxButton.OK, MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
+
+        base.OnStartup(e);
+
+        var settings = SettingsStore.Load();
+        _cts = new CancellationTokenSource();
+
+        PatternLibrary.Instance.Initialize();
+
+        _tray = new TrayController(settings, EventBus.Instance);
+        _tray.Initialize();
+
+        _monitor = new MonitorService(settings, EventBus.Instance);
+        _monitor.Start();
+
+        _mcpHost = new McpServerHost(settings, EventBus.Instance);
+
+        // wire monitor's live process snapshot into MCP state and tray Harnesses window
+        _mcpHost.State.GetProcessSnapshot    = () => _monitor.Tree.GetAll();
+        _mcpHost.State.GetBehaviorProfiles   = () => _monitor.Behavior.Profiles;
+        _mcpHost.State.ResetBehaviorProfile  = id => _monitor.Behavior.ResetProfile(id);
+        _tray.GetProcessSnapshot            = () => _monitor.Tree.GetAll();
+        _tray.GetMcpClientCount             = () => _mcpHost.Sessions.Count;
+
+        // allow AlertDetailWindow to resolve a live ProcessRecord from a PID
+        // so the ORIGINATING PROCESS section can show process name + harness type
+        AlertDetailWindow.GetProcessByPid      = pid => _monitor.Tree.GetByPid(pid);
+        // allow it to also show the harness's current escalation level + session alert count
+        AlertDetailWindow.GetProfileByHarness  = id  => _monitor.Behavior.GetProfile(id);
+        // attribute hook / spawned-shell processes to the harness they descend from
+        AlertDetailWindow.GetHarnessAncestorByPid = pid => _monitor.Tree.FindHarnessTypeAncestor(pid);
+
+        // wire behavior tracker into tray (metrics window + kill + disable actions)
+        _tray.GetBehaviorProfiles   = () => _monitor.Behavior.Profiles;
+        _tray.ResetBehaviorProfile  = id => _monitor.Behavior.ResetProfile(id);
+        _tray.GetProcessesByHarness = type => _monitor.Tree.GetByHarnessType(type);
+        _tray.KillHarness           = type => _monitor.Tree.KillHarness(type);
+        _tray.DisableHarness        = id =>
+        {
+            settings.DisabledHarnesses.Add(id);
+            SettingsStore.Save(settings);
+        };
+
+        // start MCP on a background thread so we don't block the WPF message pump
+        _ = _mcpHost.StartAsync(_cts.Token);
+
+        // publish startup event — this ensures the log window always has at least one entry
+        EventBus.Instance.Publish(new InfoEvent(
+            DateTimeOffset.UtcNow,
+            "Foreman",
+            $"Monitoring started · MCP on :{settings.McpPort} · " +
+            $"{KnownHarnesses.All.Count} built-in harness types" +
+            (settings.CustomHarnessExes.Count > 0 ? $" + {settings.CustomHarnessExes.Count} custom" : "")));
+
+        // first-run dialog deferred to idle so it doesn't block server startup
+        var port = settings.McpPort;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+            () => FirstRunDetector.RunIfNeeded(port));
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _cts?.Cancel();
+        _mcpHost?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(3));
+        _monitor?.Dispose();
+        _tray?.Dispose();
+        _singleInstance.ReleaseMutex();
+        base.OnExit(e);
+    }
+}

@@ -1,0 +1,42 @@
+{
+  "name": "codex-default",
+  "version": "1.0",
+  "description": "Default profile for OpenAI Codex harness processes",
+  "processMatch": {
+    "executableNames": ["codex.exe"],
+    "commandLineContains": ["@openai/codex", "codex/dist"],
+    "parentExecutableNames": []
+  },
+  "fileSystem": {
+    "allowedWritePaths": [
+      "%USERPROFILE%\\*",
+      "%TEMP%\\codex-*\\*"
+    ],
+    "deniedPaths": [
+      "C:\\Windows\\*",
+      "C:\\Windows\\System32\\*",
+      "%USERPROFILE%\\.ssh\\*",
+      "%USERPROFILE%\\.aws\\*"
+    ],
+    "enforceMode": "alert"
+  },
+  "commands": {
+    "blockedPatterns": ["cred-001", "cred-004", "cred-005", "priv-002", "priv-003", "priv-004", "win-004"],
+    "enforceMode": "alert"
+  },
+  "processLimits": {
+    "maxRuntimeMinutes": 480,
+    "hangThresholdMinutes": 10,
+    "hookJamThresholdMinutes": 5
+  },
+  "claudeCodeIntegration": {
+    "readSettingsJson": false,
+    "trustGrantedPermissions": false
+  },
+  "alerts": {
+    "notifyOnHang": true,
+    "notifyOnOrphan": true,
+    "notifyOnViolation": true,
+    "suppressDuplicatesWindowMinutes": 5
+  }
+}

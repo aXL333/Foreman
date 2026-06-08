@@ -1,0 +1,76 @@
+using Foreman.Core.Events;
+using Foreman.Core.Models;
+using Microsoft.Extensions.Logging;
+
+namespace Foreman.McpServer;
+
+/// <summary>
+/// Receives events from the EventBus and pushes them to connected MCP clients
+/// as MCP logging notifications. Runs entirely on the EventBus callback thread.
+/// </summary>
+public sealed class AlertDispatcher : IEventSink
+{
+    private readonly SseSessionManager _sessions;
+    private readonly ILogger<AlertDispatcher> _logger;
+
+    public AlertDispatcher(SseSessionManager sessions, ILogger<AlertDispatcher> logger)
+    {
+        _sessions = sessions;
+        _logger = logger;
+    }
+
+    void IEventSink.OnEvent(ForemanEvent evt)
+    {
+        if (evt.Severity < ForemanSeverity.Medium) return; // only push medium+ to clients
+
+        var level = evt.Severity switch
+        {
+            ForemanSeverity.Critical or ForemanSeverity.High => "error",
+            ForemanSeverity.Medium                           => "warning",
+            _                                                => "info",
+        };
+
+        var data = BuildPayload(evt);
+        _ = _sessions.BroadcastNotificationAsync(level, "foreman", data);
+    }
+
+    private static object BuildPayload(ForemanEvent evt) => evt switch
+    {
+        HangDetectedEvent h => new
+        {
+            type = "hang_alert",
+            pid = h.ProcessId,
+            processName = h.ProcessName,
+            uptimeMinutes = h.UptimeMinutes,
+            silentMinutes = h.SilentMinutes,
+            message = h.Message,
+        },
+        OrphanDetectedEvent o => new
+        {
+            type = "orphan_alert",
+            pid = o.ProcessId,
+            processName = o.ProcessName,
+            deadParentPid = o.DeadParentPid,
+            deadParentName = o.DeadParentName,
+            message = o.Message,
+        },
+        CommandAlertEvent c => new
+        {
+            type = "command_alert",
+            pid = c.ProcessId,
+            ruleId = c.RuleId,
+            ruleName = c.RuleName,
+            severity = c.Severity.ToString(),
+            message = c.Message,
+        },
+        PermissionViolationEvent v => new
+        {
+            type = "permission_violation",
+            pid = v.ProcessId,
+            profileName = v.ProfileName,
+            violationType = v.ViolationType,
+            message = v.Message,
+        },
+        _ => new { type = "generic", message = evt.Message },
+    };
+}

@@ -1,0 +1,33 @@
+using Foreman.Core.Heuristics;
+using Foreman.Core.Models;
+
+namespace Foreman.Core.Tests.Heuristics;
+
+/// <summary>
+/// A harness running its OWN configured hook scripts (under .claude/hooks/) legitimately uses
+/// -ExecutionPolicy Bypass / -NoProfile, so the launcher-hygiene rules (win-001/win-002) must
+/// be suppressed for those command lines — otherwise every hook invocation spams an alert and
+/// escalates the harness. The same patterns must still fire for non-hook commands.
+/// </summary>
+public sealed class HookSuppressionTests : IClassFixture<PatternLibraryFixture>
+{
+    private readonly CommandAnalyzer _analyzer = CommandAnalyzer.Instance;
+
+    [Theory]
+    [InlineData(@"powershell -NoProfile -ExecutionPolicy Bypass -File ""C:\Users\AxelW\.claude\hooks\log-generation.ps1""")]
+    [InlineData(@"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NonInteractive -ExecutionPolicy Bypass -Command ""& 'C:\Users\AxelW\.claude\hooks\pre-tool.ps1'""")]
+    public void HarnessOwnHookLauncher_IsSuppressed(string cmd)
+    {
+        Assert.Null(_analyzer.Analyze(cmd, "powershell.exe"));
+    }
+
+    [Fact]
+    public void ExecutionPolicyBypass_OutsideHookDir_StillAlerts()
+    {
+        // Same launcher hygiene, but not a harness hook path — must NOT be suppressed.
+        var match = _analyzer.Analyze(
+            @"powershell -NoProfile -ExecutionPolicy Bypass -File C:\tools\deploy.ps1", "powershell.exe");
+        Assert.NotNull(match);
+        Assert.Equal("win-002", match.RuleId);
+    }
+}

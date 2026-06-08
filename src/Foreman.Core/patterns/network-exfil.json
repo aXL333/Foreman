@@ -1,0 +1,137 @@
+{
+  "$schema": "https://foreman.local/pattern-schema/v1",
+  "category": "network-exfil",
+  "version": "2.0",
+  "rules": [
+    {
+      "id": "net-001",
+      "name": "curl pipe to shell",
+      "severity": "critical",
+      "description": "Fetch a remote script with curl or wget and pipe it directly into a shell interpreter. The script executes with full permissions before you can inspect it — the canonical drive-by install attack.",
+      "guidance": "Never pipe untrusted URLs directly into bash/sh. Always download first, inspect the file, then run. Review what was downloaded and whether it ran. Check for new cron jobs, services, or backdoors the downloaded script may have installed.",
+      "pattern": "\\b(curl|wget)\\b[^|\\n]*\\|\\s*(bash|sh|zsh|fish|dash|ksh|ash|busybox)",
+      "platforms": ["bash", "sh", "wsl", "cmd"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-002",
+      "name": "PowerShell IEX from web",
+      "severity": "critical",
+      "description": "Invoke-Expression (iex) downloading and immediately executing a web-hosted script via Invoke-WebRequest or WebClient. This is the most common PowerShell malware delivery pattern.",
+      "guidance": "Terminate the harness. Check what URL was targeted and what code was downloaded. Inspect recently added startup entries, scheduled tasks, and registry Run keys that the downloaded script may have created.",
+      "pattern": "(?:iex|Invoke-Expression)\\s*\\(\\s*(?:iwr|Invoke-WebRequest|\\(New-Object\\s+Net\\.WebClient\\)\\.DownloadString)",
+      "platforms": ["powershell", "cmd"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-003",
+      "name": "env dump to network",
+      "severity": "high",
+      "description": "Piping the process environment (env, printenv, set) to a network tool — sends all environment variables including API keys, tokens, and passwords to an external host.",
+      "guidance": "Immediately rotate any API keys, tokens, or passwords that may have been in the environment at the time. Check your shell profile and .env files for secrets. Review what host received the data.",
+      "pattern": "\\b(env|printenv|set)\\b[^\\n]*\\|[^\\n]*(curl|wget|nc |ncat|netcat|\\btelnet\\b)",
+      "platforms": ["bash", "sh", "wsl", "cmd"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-004",
+      "name": "netcat listener or bind shell",
+      "severity": "high",
+      "description": "Netcat used in listener mode (-l) or with a shell as the executed program (-e bash). Establishes a raw TCP backdoor that anyone on the network can connect to.",
+      "guidance": "Terminate any nc processes immediately. Check netstat for listening sockets. Review firewall rules that may have been added. Determine whether anyone connected to the listener while it was open.",
+      "pattern": "\\b(nc|ncat|netcat)\\s+(-[a-z]*l[a-z]*|-[a-z]*e[a-z]*|.*\\b(bash|sh|cmd)\\b)",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": ["pentest_allowed"]
+    },
+    {
+      "id": "net-005",
+      "name": "Python reverse shell one-liner",
+      "severity": "critical",
+      "description": "Python one-liner creating a socket connection and duplicating file descriptors to shell stdin/stdout/stderr — a textbook reverse shell that gives remote code execution to whoever controls the connecting host.",
+      "guidance": "Terminate the harness and any python processes it spawned. Check active connections with 'netstat -an | grep ESTABLISHED'. Determine what host was connected to and treat your machine as potentially compromised.",
+      "pattern": "python[23]?\\s+-c\\s+['\"].*socket.*connect.*os\\.dup2|python[23]?\\s+-c\\s+['\"].*__import__.*socket.*connect",
+      "platforms": ["bash", "sh", "wsl", "cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-006",
+      "name": "PowerShell download cradle",
+      "severity": "high",
+      "description": "WebClient or BitsTransfer used to download a file or string from a remote URL. Often used as the first stage of a multi-stage attack to download a payload without triggering AV.",
+      "guidance": "Inspect what URL was targeted and what file was downloaded. If the file was executed, treat the session as potentially compromised. Check the download location for unexpected executables or scripts.",
+      "pattern": "\\bNew-Object\\s+Net\\.WebClient[^\\n]*\\.(?:DownloadFile|DownloadString|DownloadData)\\s*\\(",
+      "platforms": ["powershell"],
+      "falsePositiveTags": ["installer_allowed"]
+    },
+    {
+      "id": "net-007",
+      "name": "certutil download and decode",
+      "severity": "high",
+      "description": "certutil -urlcache or -decode used to download files from URLs or decode base64-encoded payloads — a common living-off-the-land technique to bypass web filters.",
+      "guidance": "Inspect the downloaded/decoded file. certutil is a signed Windows binary, so this bypasses many AV heuristics. Determine whether the output file was subsequently executed.",
+      "pattern": "\\bcertutil\\b[^\\n]*(-urlcache|-decode|-decodehex)",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-008",
+      "name": "mshta executing remote script",
+      "severity": "critical",
+      "description": "mshta.exe loading a remote HTA (HTML Application) or VBScript from a URL. HTA runs with full trust and can access the local filesystem and registry without browser sandbox restrictions.",
+      "guidance": "Terminate mshta immediately. HTA files have the same permissions as a native executable and run with the user's full privileges. Review whether the remote HTA ran to completion and what it may have modified.",
+      "pattern": "\\bmshta\\b[^\\n]*(https?://|\\\\\\\\[^\\n]+\\.hta\\b)",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-009",
+      "name": "regsvr32 loading remote COM DLL",
+      "severity": "critical",
+      "description": "regsvr32 /s /u /i: loading a remote script or DLL via URL (Squiblydoo technique). Bypasses AppLocker because regsvr32 is a trusted Microsoft binary.",
+      "guidance": "Terminate the process. regsvr32-loaded DLLs execute with the calling process's permissions and bypass many application control policies. Review recently registered COM objects and DLLs in HKEY_CLASSES_ROOT.",
+      "pattern": "\\bregsvr32\\b[^\\n]*/i:https?://",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-010",
+      "name": "DNS tunneling via nslookup or dig queries",
+      "severity": "medium",
+      "description": "Bulk DNS queries constructed from file content or environment variables — a data exfiltration technique that encodes data in DNS query hostnames to bypass HTTP proxies.",
+      "guidance": "Review DNS query logs for unusual subdomains with long base32/base64-like names. Check what data source was used to construct the queries. DNS exfil is hard to detect via firewall but leaves traces in resolver logs.",
+      "pattern": "\\b(nslookup|dig|host)\\b[^\\n]*(\\$\\(|`|base64|xxd|od -A|cut -c)",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-011",
+      "name": "file content piped to remote socket",
+      "severity": "high",
+      "description": "cat, base64, or tar piped directly to curl, wget, or nc with data going to an external URL — file exfiltration by posting local file content to a remote server.",
+      "guidance": "Determine which files were included in the piped output and what remote server received them. Rotate any credentials in the exfiltrated files. Check whether the destination server is known-benign (e.g., a paste site or attacker-controlled server).",
+      "pattern": "\\b(cat|base64|tar|zip|7z)\\b[^\\n]*\\|[^\\n]*(curl|wget|nc |ncat)[^\\n]*(http|ftp|\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})",
+      "platforms": ["bash", "sh", "wsl", "cmd"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "net-012",
+      "name": "curl/wget POST with sensitive file",
+      "severity": "high",
+      "description": "curl or wget -d @file or --data-binary @file POSTing a local file to a remote server. Commonly used to upload credentials, source code, or database dumps.",
+      "guidance": "Identify which file was POSTed and to what server. If it was a credentials file, .env, private key, or source file, rotate the exposed secrets immediately and review the destination server's legitimacy.",
+      "pattern": "\\b(curl|wget)\\b[^\\n]*(-d\\s*@|-F\\s+[^=]+=@|--data-binary\\s+@|--upload-file)",
+      "platforms": ["bash", "sh", "wsl", "cmd", "powershell"],
+      "falsePositiveTags": ["api_upload_allowed"]
+    },
+    {
+      "id": "net-013",
+      "name": "ssh tunnel or port forward established",
+      "severity": "medium",
+      "description": "ssh -L or -R creating a local or remote port forward — may expose internal services to an external host or route traffic through an attacker-controlled server.",
+      "guidance": "Review the tunnel parameters: local (-L) tunnels expose an internal service externally, remote (-R) tunnels expose the remote host's port on your machine. Determine whether the tunnel was intentional and what service was being forwarded.",
+      "pattern": "\\bssh\\b[^\\n]*(-L\\s+\\d|(-R|--remote)\\s+\\d|\\bDynamicForward\\b|\\b-D\\s+\\d)",
+      "platforms": ["bash", "sh", "wsl", "cmd", "powershell"],
+      "falsePositiveTags": ["dev_tunnel_allowed"]
+    }
+  ]
+}

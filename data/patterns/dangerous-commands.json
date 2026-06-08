@@ -1,0 +1,52 @@
+{
+  "$schema": "https://foreman.local/pattern-schema/v1",
+  "category": "dangerous-commands",
+  "version": "1.0",
+  "rules": [
+    {
+      "id": "del-001",
+      "name": "recursive delete of critical unix paths",
+      "severity": "critical",
+      "description": "rm -rf targeting filesystem root or critical system directories",
+      "pattern": "\\brm\\s+(-[a-z]*f[a-z]*r[a-z]*|-[a-z]*r[a-z]*f[a-z]*)\\s+(--|/|~|\\$HOME|/etc|/usr|/bin|/lib|/var|\\*)",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "del-002",
+      "name": "recursive delete of critical windows paths",
+      "severity": "critical",
+      "description": "rmdir /s or rd /s targeting windows system folders",
+      "pattern": "\\b(rmdir|rd)\\s+/s\\s+.*?(c:\\\\(windows|system32|program files)|%systemroot%|%windir%)",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "del-003",
+      "name": "Windows format disk",
+      "severity": "critical",
+      "description": "format command targeting a drive letter",
+      "pattern": "\\bformat\\s+[a-z]:\\s*(/fs:|/q|/p:|$)",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "del-004",
+      "name": "diskpart destructive commands",
+      "severity": "critical",
+      "description": "diskpart clean or delete partition/disk",
+      "pattern": "\\bdiskpart\\b.*\\b(clean|delete (partition|disk|volume))",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "del-005",
+      "name": "recursive delete of home or project via wildcard",
+      "severity": "high",
+      "description": "rm -rf with broad wildcard in home or working directory",
+      "pattern": "\\brm\\s+-[a-z]*r[a-z]*f[a-z]*\\s+[~./]",
+      "platforms": ["bash", "sh", "wsl"],
+      "falsePositiveTags": ["cleanup_script_allowed"]
+    }
+  ]
+}

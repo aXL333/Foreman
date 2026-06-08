@@ -1,0 +1,43 @@
+## Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+publish/
+artifacts/
+
+## Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userprefs
+*.DotSettings
+*.DotSettings.user
+
+## Test results / coverage
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+
+## Inno Setup output
+installer/Output/
+*.iss.bak
+
+## Local runtime data (profiles, settings) live in %LocalAppData%\Foreman, never in-tree
+*.local.json
+
+## Editor backups / cruft
+*.bak
+*~
+
+## OS cruft
+Thumbs.db
+desktop.ini
+.DS_Store
+
+## Logs and dated session-scratch artifacts (e.g. Monday-June-8-2026.txt)
+*.log
+/*-20[0-9][0-9].txt

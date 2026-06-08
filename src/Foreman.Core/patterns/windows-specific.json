@@ -1,0 +1,130 @@
+{
+  "$schema": "https://foreman.local/pattern-schema/v1",
+  "category": "windows-specific",
+  "version": "1.0",
+  "rules": [
+    {
+      "id": "win-001",
+      "name": "PowerShell encoded command",
+      "severity": "high",
+      "description": "-EncodedCommand flag with a base64 payload indicates obfuscation",
+      "pattern": "powershell(?:\\.exe)?\\s+(?:[^\\n]*\\s+)?-(?:e|enc|encoded|encodedCommand)\\s+[A-Za-z0-9+/]{20,}={0,2}",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": ["encoded_cmd_allowed"]
+    },
+    {
+      "id": "win-002",
+      "name": "PowerShell execution policy bypass",
+      "severity": "medium",
+      "description": "Bypassing PowerShell execution policy to run unsigned scripts",
+      "pattern": "powershell(?:\\.exe)?\\s+(?:[^\\n]*\\s+)?-(?:ExecutionPolicy|ep)\\s+(?:Bypass|Unrestricted)\\s+-",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": ["dev_allowed"]
+    },
+    {
+      "id": "win-003",
+      "name": "registry run key persistence",
+      "severity": "high",
+      "description": "Writing to Run/RunOnce registry keys — persistence mechanism",
+      "pattern": "\\breg\\s+add\\s+HKLM?[CU]?\\\\(?:Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run)",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": ["startup_entry_allowed"]
+    },
+    {
+      "id": "win-004",
+      "name": "bypass AMSI",
+      "severity": "critical",
+      "description": "Patching or disabling AMSI (Antimalware Scan Interface) — common malware tactic",
+      "pattern": "AmsiScanBuffer|amsiInitFailed|\\[Ref\\]\\.Assembly\\.GetType.*amsi|Invoke-AmsiBypass",
+      "platforms": ["powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "win-005",
+      "name": "Invoke-Expression with variable or string",
+      "severity": "high",
+      "description": "iex with a dynamic variable or obfuscated string — common stage-2 loader",
+      "pattern": "(?:iex|Invoke-Expression)\\s+(?:\\$[A-Za-z_][A-Za-z0-9_]*|['\"][A-Za-z]\\s*[+&])",
+      "platforms": ["powershell"],
+      "falsePositiveTags": ["dev_allowed"]
+    },
+    {
+      "id": "win-006",
+      "name": "shutdown or restart",
+      "severity": "high",
+      "description": "System shutdown or restart command — unexpected in automated scripts",
+      "pattern": "\\b(?:shutdown|restart-computer)\\s+(?:/s|/r|-Force|-Restart)",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": ["sysadmin_allowed"]
+    },
+    {
+      "id": "win-007",
+      "name": "WMI subscription persistence",
+      "severity": "high",
+      "description": "Creating WMI event subscriptions — fileless persistence technique",
+      "pattern": "New-CimInstance.*__EventFilter|Set-WmiInstance.*__EventFilter|EventConsumer.*CommandLineEventConsumer",
+      "platforms": ["powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "win-008",
+      "name": "Windows Defender / antivirus disable",
+      "severity": "critical",
+      "description": "Disabling Windows Defender real-time protection, disabling the Windows Firewall, or stopping AV services. This is a classic pre-attack technique to blind the system before executing malicious code.",
+      "guidance": "Never allow an AI harness to disable your antivirus or firewall. If this was unexpected, re-enable Defender immediately (Settings > Windows Security), run a full system scan, and audit all changes the harness made.",
+      "pattern": "Set-MpPreference\\s+.*-Disable(?:Realtime|Behavior|IOAVProtection|ScriptScanning)Monitoring\\s+\\$?(?:true|1)|netsh\\s+advfirewall\\s+set\\s+allprofiles\\s+state\\s+off|sc\\s+(?:stop|delete)\\s+(?:windefend|mpsvc|wdnisvc|wscsvc)\\b",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "win-009",
+      "name": "Shadow copy / backup deletion",
+      "severity": "critical",
+      "description": "Deleting Volume Shadow Copies (VSS), system backups, or disabling recovery options. This is the signature technique used by ransomware to prevent recovery — it eliminates all Windows-managed restore points and backups.",
+      "guidance": "This is a critical ransomware indicator. Check all your files for unexpected encryption immediately. Run a full system scan and restore from external backups if files are affected. Report to your security team if you are in a corporate environment.",
+      "pattern": "vssadmin\\s+delete\\s+shadows|wmic\\s+(?:shadowcopy|shadow)\\s+delete|Get-WmiObject.*Win32_ShadowCopy.*\\.Delete|bcdedit\\s+/set\\s+[^\\n]*(?:recoveryenabled\\s+no|safeboot)|wbadmin\\s+delete\\s+(?:catalog|systemstatebackup)",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "win-010",
+      "name": "UAC bypass technique",
+      "severity": "high",
+      "description": "Exploiting a known UAC bypass to elevate privileges without prompting the user. Common techniques abuse auto-elevated Windows binaries like fodhelper.exe, eventvwr.exe, or computerdefaults.exe via registry manipulation.",
+      "guidance": "UAC bypasses should never occur in a legitimate coding harness. If detected, the harness may have been weaponised. Terminate immediately, reboot, and audit all registry changes (HKCU\\Software\\Classes) the harness may have made.",
+      "pattern": "fodhelper|eventvwr(?:\\.exe)?[^\\n]*Software\\\\Classes\\\\ms|computerdefaults|sdclt[^\\n]*exefile|cmstp\\.exe[^\\n]*\\.inf|HKCU:\\\\Software\\\\Classes\\\\ms-settings",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "win-011",
+      "name": "Token privilege / SYSTEM elevation",
+      "severity": "high",
+      "description": "Attempting to acquire SYSTEM-level token privileges or debug privileges via API manipulation. This technique is used to elevate from a standard user context to SYSTEM without UAC prompting.",
+      "guidance": "Legitimate coding tasks never require debug or impersonation token manipulation. Terminate the harness and investigate why it attempted privilege escalation.",
+      "pattern": "Invoke-TokenManipulation|Get-System\\b|SeDebugPrivilege|SeTcbPrivilege|AdjustTokenPrivileges|\\[System\\.Diagnostics\\.Process\\]::EnterDebugMode",
+      "platforms": ["powershell", "cmd"],
+      "falsePositiveTags": []
+    },
+    {
+      "id": "win-012",
+      "name": "PsExec remote execution",
+      "severity": "high",
+      "description": "Executing commands on remote machines via PsExec or similar remote execution tools. While legitimate for sysadmins, this is unexpected behaviour from an AI coding harness and a common lateral movement technique.",
+      "guidance": "1. Review whether the harness was explicitly asked to execute remote commands.\n2. If not, terminate it and audit what commands may have run on remote systems.\n3. Check Windows Event Logs on the target machine for unauthorised logins.",
+      "pattern": "psexec(?:\\.exe)?\\s+\\\\\\\\\\S+|Invoke-Command[^\\n]*-ComputerName\\s+(?!localhost|127\\.0\\.0\\.1)",
+      "platforms": ["cmd", "powershell"],
+      "falsePositiveTags": ["remote_mgmt_allowed"]
+    },
+    {
+      "id": "win-013",
+      "name": "DPAPI master key directory access",
+      "severity": "high",
+      "description": "Accessing the DPAPI master key directory (%APPDATA%\\Microsoft\\Protect), which contains the encryption keys used to protect all DPAPI-encrypted data: browser credentials, Wi-Fi passwords, Outlook passwords, and more.",
+      "guidance": "DPAPI master key access is a hallmark of credential harvesting malware. Terminate the harness immediately and consider rotating all credentials on the affected machine.",
+      "pattern": "AppData\\\\Roaming\\\\Microsoft\\\\Protect\\\\|\\\\Microsoft\\\\Protect\\\\[A-Z0-9-]+",
+      "platforms": ["cmd", "powershell", "bash"],
+      "falsePositiveTags": []
+    }
+  ]
+}

@@ -1,0 +1,133 @@
+using Foreman.Core.Models;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+
+namespace Foreman.Monitor;
+
+/// <summary>
+/// Thread-safe store of all tracked processes. Keyed by (pid, startTimeMs) to survive PID reuse.
+/// </summary>
+public sealed class ProcessTreeTracker
+{
+    private readonly ConcurrentDictionary<string, ProcessRecord> _records = new();
+    // secondary lookup: pid → key (last winner wins on reuse)
+    private readonly ConcurrentDictionary<int, string> _pidIndex = new();
+
+    public IEnumerable<ProcessRecord> GetAll() => _records.Values;
+
+    public ProcessRecord? GetByPid(int pid)
+    {
+        if (_pidIndex.TryGetValue(pid, out var key) && _records.TryGetValue(key, out var rec))
+            return rec;
+        return null;
+    }
+
+    public void OnProcessCreated(ProcessRecord record)
+    {
+        _records[record.Key] = record;
+        _pidIndex[record.Pid] = record.Key;
+    }
+
+    /// <summary>
+    /// Called when a process exits. Returns all live children that are now orphaned.
+    /// </summary>
+    public IReadOnlyList<ProcessRecord> OnProcessDeleted(int pid)
+    {
+        if (!_pidIndex.TryGetValue(pid, out var key)) return [];
+
+        _records.TryRemove(key, out _);
+        _pidIndex.TryRemove(pid, out _);
+
+        // find children whose parent was this pid and are still alive
+        return _records.Values
+            .Where(r => r.ParentPid == pid && r.State != ProcessState.Terminated)
+            .ToList();
+    }
+
+    public bool IsTrackedHarness(int pid)
+    {
+        var rec = GetByPid(pid);
+        return rec?.IsHarness ?? false;
+    }
+
+    /// <summary>
+    /// Walks the parent chain from <paramref name="pid"/> (inclusive) and returns the first
+    /// record matching <paramref name="match"/>, or null.
+    ///
+    /// Safe against PID reuse, missing parents, and cycles: the walk stops as soon as a
+    /// parent is no longer tracked, and a visited-set prevents infinite loops. Failing to
+    /// find a match returns null, so callers fail *toward silence* (no false attribution).
+    /// </summary>
+    private ProcessRecord? WalkAncestors(int pid, Func<ProcessRecord, bool> match)
+    {
+        var seen = new HashSet<int>();
+        var current = GetByPid(pid);
+        while (current is not null && seen.Add(current.Pid))
+        {
+            if (match(current)) return current;
+            if (current.ParentPid == 0 || current.ParentPid == current.Pid) break;
+            current = GetByPid(current.ParentPid);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Nearest ancestor (including the process itself) that is an actively-monitored harness
+    /// (IsHarness == true). Used to scope hang detection to harness trees.
+    /// </summary>
+    public ProcessRecord? FindHarnessAncestor(int pid) => WalkAncestors(pid, static r => r.IsHarness);
+
+    /// <summary>
+    /// Nearest ancestor (including the process itself) that carries a HarnessType — even a
+    /// disabled one. Used to *attribute* a child process to the harness it belongs to: a
+    /// PowerShell hook or a shell spawned by claude-code matches no harness rule itself, but
+    /// its parent chain leads back to the harness node process.
+    /// </summary>
+    public ProcessRecord? FindHarnessTypeAncestor(int pid) => WalkAncestors(pid, static r => r.HarnessType is not null);
+
+    public void UpdateIoCounters(int pid, ulong readOps, ulong writeOps)
+    {
+        if (!_pidIndex.TryGetValue(pid, out var key)) return;
+        if (!_records.TryGetValue(key, out var rec)) return;
+
+        if (readOps != rec.LastReadOps || writeOps != rec.LastWriteOps)
+        {
+            rec.LastReadOps = readOps;
+            rec.LastWriteOps = writeOps;
+            rec.LastIoChangeTime = DateTimeOffset.UtcNow;
+            rec.State = ProcessState.Active;
+        }
+    }
+
+    public void SetState(int pid, ProcessState state)
+    {
+        if (!_pidIndex.TryGetValue(pid, out var key)) return;
+        if (_records.TryGetValue(key, out var rec))
+            rec.State = state;
+    }
+
+    /// <summary>
+    /// Returns all currently tracked processes whose HarnessType matches
+    /// (case-insensitive). Used by BehaviorMetricsWindow / EscalationAlarmWindow.
+    /// </summary>
+    public IEnumerable<ProcessRecord> GetByHarnessType(string harnessType) =>
+        _records.Values.Where(r =>
+            string.Equals(r.HarnessType, harnessType, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Sends SIGKILL to every tracked process whose HarnessType matches.
+    /// Silently ignores processes that have already exited.
+    /// </summary>
+    public void KillHarness(string harnessType)
+    {
+        foreach (var rec in GetByHarnessType(harnessType).ToList())
+        {
+            try
+            {
+                using var proc = Process.GetProcessById(rec.Pid);
+                proc.Kill(entireProcessTree: false);
+            }
+            catch { /* already exited or access denied */ }
+        }
+    }
+}
