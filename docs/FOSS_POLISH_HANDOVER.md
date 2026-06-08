@@ -14,6 +14,7 @@ Date: 2026-06-08
 - MCP alert payloads include spawner and owner metadata so another harness/API can audit the event without reconstructing stale process-tree state.
 - MCP/profile integration now has integration instructions, validation, audit preference listing, and route selection.
 - T3 Code and OpenCode are built-in harnesses with classifier rules, default profiles, MCP integration metadata, and audit-routing defaults.
+- Alert detail now has `Ask Harness` and `Kill/End Process` actions. Ask Harness copies a targeted audit prompt using the LLM triage preference list; Kill/End Process terminates the specific alert target PID after confirmation.
 
 ## Verification
 
@@ -28,7 +29,7 @@ Latest local result:
 
 - Tests: 66 passed, 0 failed.
 - Release app build: succeeded, 0 warnings, 0 errors.
-- Running instance after bounce: `Foreman.App` PID 77812.
+- Running instance after bounce: `Foreman.App` PID 76076.
 - Health endpoint: `http://localhost:54321/health` returned `status: ok`.
 
 ## Push Status

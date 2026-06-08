@@ -60,6 +60,9 @@ public partial class App : Application
         AlertDetailWindow.GetProfileByHarness  = id  => _monitor.Behavior.GetProfile(id);
         // attribute hook / spawned-shell processes to the harness they descend from
         AlertDetailWindow.GetHarnessAncestorByPid = pid => _monitor.Tree.FindHarnessTypeAncestor(pid);
+        AlertDetailWindow.GetProcessSnapshot = () => _monitor.Tree.GetAll();
+        AlertDetailWindow.GetLlmTriageSettings = () => settings.LlmTriage;
+        AlertDetailWindow.KillProcessByPid = pid => _monitor.Tree.KillProcess(pid);
 
         // wire behavior tracker into tray (metrics window + kill + disable actions)
         _tray.GetBehaviorProfiles   = () => _monitor.Behavior.Profiles;

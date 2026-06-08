@@ -157,4 +157,23 @@ public sealed class ProcessTreeTracker
             catch { /* already exited or access denied */ }
         }
     }
+
+    /// <summary>
+    /// Terminates a specific process and any descendants Windows can associate with it.
+    /// Returns false when the process has already exited or Windows denies access.
+    /// </summary>
+    public bool KillProcess(int pid)
+    {
+        try
+        {
+            using var proc = Process.GetProcessById(pid);
+            proc.Kill(entireProcessTree: true);
+            SetState(pid, ProcessState.Terminated);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }
