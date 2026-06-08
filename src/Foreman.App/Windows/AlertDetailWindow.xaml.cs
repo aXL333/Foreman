@@ -1,9 +1,7 @@
 using Foreman.Core.Behavior;
 using Foreman.Core.Events;
 using Foreman.Core.Models;
-using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Interop;
 using System.Windows.Media;
 
 namespace Foreman.App.Windows;
@@ -45,27 +43,8 @@ public partial class AlertDetailWindow : Window
     public static void ShowFor(ForemanEvent evt)
     {
         var w = new AlertDetailWindow(evt);
-
-        // Topmost=true momentarily ensures the window appears above everything
-        // (including the taskbar notification area), then we release it so the user
-        // can Alt+Tab freely afterwards.
-        w.Topmost = true;
         w.Show();
-        w.Activate();
-        w.Focus();
-
-        // SetForegroundWindow bypasses the Windows focus-stealing prevention rules
-        // that cause Activate() to silently fail when a different app has focus.
-        var hwnd = new WindowInteropHelper(w).Handle;
-        if (hwnd != IntPtr.Zero)
-            NativeMethods.SetForegroundWindow(hwnd);
-
-        w.Topmost = false;
-    }
-
-    private static class NativeMethods
-    {
-        [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+        WindowActivation.Surface(w);
     }
 
     private void AcknowledgeClick(object sender, RoutedEventArgs e)
@@ -244,7 +223,7 @@ public sealed class AlertDetailVm
                 EventTypeLabel = "Process Hang Detected";
                 WhyDangerous =
                     $"\"{hang.ProcessName}\" (pid {hang.ProcessId}) has been running for {hang.UptimeMinutes} minutes " +
-                    $"with no I/O activity for {hang.SilentMinutes} minutes.\n\n" +
+                    $"with no I/O activity for {hang.SilentMinutes} minutes.{ResolveHarnessOwner(hang.ParentHarnessPid)}\n\n" +
                     $"This means the process is stuck — waiting for input that will never come, " +
                     $"caught in an infinite loop, or blocked on a locked resource. Hung harness " +
                     $"children can accumulate silently and consume memory or file handles.";
@@ -376,6 +355,16 @@ public sealed class AlertDetailVm
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /// <summary>Names the harness a hung/orphaned child belongs to, for the alert text.</summary>
+    private static string ResolveHarnessOwner(int? harnessPid)
+    {
+        if (harnessPid is not int hp) return "";
+        var rec = AlertDetailWindow.GetProcessByPid?.Invoke(hp);
+        return rec?.HarnessType is { } ht
+            ? $" Spawned by the {ht} harness ({rec.Name}, pid {hp})."
+            : $" Spawned by harness process pid {hp}.";
+    }
 
     private static (Brush bg, Brush fg) EscalationColors(EscalationLevel level) => level switch
     {
