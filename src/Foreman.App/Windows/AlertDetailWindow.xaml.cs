@@ -109,20 +109,52 @@ public partial class AlertDetailWindow : Window
             return;
         }
 
-        var destination = route.Selected is null
-            ? $"{route.Reason}\n\nThe audit prompt has still been copied so you can paste it into the harness or API of your choice."
-            : BuildRouteMessage(route);
-
         EventBus.Instance.Publish(new InfoEvent(
             DateTimeOffset.UtcNow,
             "Foreman",
             $"Audit prompt prepared for alert [{_event.Id}] via {route.Selected?.DisplayName ?? "manual route"}"));
 
         MessageBox.Show(
-            destination + "\n\nPrompt copied to clipboard.",
+            BuildAskHarnessMessage(targetHarnessId, route),
             "Foreman - Ask Harness",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
+    }
+
+    private string BuildAskHarnessMessage(string? targetHarnessId, AuditRouteSelection route)
+    {
+        var target = Blank(targetHarnessId, "this process");
+        var sb = new StringBuilder();
+        sb.AppendLine("An audit prompt for this alert is on your clipboard.");
+        sb.AppendLine();
+
+        if (route.Selected is not { } a)
+        {
+            sb.AppendLine($"No configured reviewer matched {target}, so paste it into whichever harness or API you'd like to review it.");
+            return sb.ToString().TrimEnd();
+        }
+
+        sb.AppendLine($"Suggested reviewer: {a.DisplayName} (configurable in Settings).");
+        if (a.AuditorType.Equals("api", StringComparison.OrdinalIgnoreCase))
+        {
+            sb.AppendLine(a.Available
+                ? $"Send it to the {a.DisplayName} API to review {target}."
+                : $"{a.DisplayName} is your preferred reviewer for {target}, but no API endpoint is configured yet.");
+        }
+        else
+        {
+            sb.AppendLine(a.Available
+                ? $"You have {a.RunningHarnessCount} {a.DisplayName} instance{(a.RunningHarnessCount == 1 ? "" : "s")} running — paste it into one to review {target}."
+                : $"{a.DisplayName} is your preferred reviewer for {target}, but isn't running right now — start it, or paste the prompt into any AI.");
+        }
+
+        if (route.UsedSeverityFallback)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"(This alert is {_event.Severity}, below the High/Critical level auto-triage routes, so this is a manual suggestion — not an automatic hand-off.)");
+        }
+
+        return sb.ToString().TrimEnd();
     }
 
     private void KillProcessClick(object sender, RoutedEventArgs e)
@@ -297,22 +329,6 @@ public partial class AlertDetailWindow : Window
                 sb.AppendLine($"- Reason: {esc.Reason}");
                 break;
         }
-    }
-
-    private static string BuildRouteMessage(AuditRouteSelection route)
-    {
-        var selected = route.Selected!;
-        var availability = selected.AuditorType.Equals("api", StringComparison.OrdinalIgnoreCase)
-            ? (selected.Available ? "API endpoint configured." : "API endpoint is not configured.")
-            : (selected.Available
-                ? $"Detected {selected.RunningHarnessCount} running {selected.DisplayName} process{(selected.RunningHarnessCount == 1 ? "" : "es")}."
-                : $"{selected.DisplayName} is preferred but is not currently detected as running.");
-
-        var severityNote = route.UsedSeverityFallback
-            ? "\n\nNo automatic triage route matched this alert severity, so this manual ask used the same target preference list without the minimum-severity filter."
-            : "";
-
-        return $"Selected auditor: {selected.DisplayName} ({selected.AuditorType}:{selected.AuditorId}).\n{availability}{severityNote}";
     }
 
     private AuditRouteSelection ResolveAuditRoute(string? targetHarnessId, ForemanSeverity severity)
