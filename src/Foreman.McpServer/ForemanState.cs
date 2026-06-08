@@ -1,5 +1,6 @@
 using Foreman.Core.Behavior;
 using Foreman.Core.Events;
+using Foreman.Core.Mcp;
 using Foreman.Core.Models;
 using Foreman.Core.Profiles;
 using Foreman.Core.Settings;
@@ -27,6 +28,7 @@ public sealed class ForemanState : IEventSink
     public Func<string, string?>?                  GetDefaultProfileNameByHarnessId { get; set; }
     public Func<int, ProcessRecord?>?              FindHarnessAncestorByPid { get; set; }
     public Func<int>?                              GetMcpSessionCount { get; set; }
+    public Func<IEnumerable<McpServerEntry>>?      GetMcpInventory    { get; set; }
 
     /// <summary>Resets behavioral metrics for a specific harness ID. Returns false if not found.</summary>
     public Action<string>? ResetBehaviorProfile { get; set; }
