@@ -28,6 +28,14 @@ public sealed class HangDetector
     // We only re-alert if this advances (i.e. I/O resumed and the process hung anew).
     private readonly ConcurrentDictionary<int, DateTimeOffset> _alertedEpoch = new();
 
+    // Infrastructure helpers a harness spawns that legitimately sit idle: a console host
+    // has no I/O when its console isn't being written to. They are real harness descendants,
+    // so the scope check would otherwise flag them — but a hung conhost is never actionable.
+    private static readonly HashSet<string> _infraProcessNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "conhost.exe",
+    };
+
     public HangDetector(EventBus bus, ForemanSettings settings, ProcessTreeTracker tree)
     {
         _bus = bus;
@@ -39,6 +47,7 @@ public sealed class HangDetector
     {
         if (record.State == ProcessState.Terminated) return;
         if (record.IoCountersUnavailable) return;
+        if (_infraProcessNames.Contains(record.Name)) return;   // conhost.exe etc. — idle by nature
 
         // ── Scope: only harness *children* are hang candidates ───────────────────
         // FindHarnessAncestor returns the nearest IsHarness ancestor (possibly the

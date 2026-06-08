@@ -141,4 +141,23 @@ public sealed class HangDetectorTests
         Assert.Single(hits);
         Assert.Null(hits[0].ParentHarnessPid);  // no harness owner
     }
+
+    [Fact]
+    public void InfrastructureChild_ConhostUnderHarness_DoesNotAlert()
+    {
+        // conhost.exe is a real harness descendant but a passive console host — idling is
+        // normal, so it must not be flagged even though it is inside a harness tree.
+        var tree    = new ProcessTreeTracker();
+        var harness = Idle(900_601, 900_600, "codex.exe", isHarness: true, harnessType: "codex");
+        var conhost = Idle(900_602, harness.Pid, "conhost.exe");
+        tree.OnProcessCreated(harness);
+        tree.OnProcessCreated(conhost);
+
+        var hits = CaptureHangsFor(conhost.Pid);
+        var sut  = new HangDetector(EventBus.Instance, new ForemanSettings(), tree);
+
+        sut.Check(conhost);
+
+        Assert.Empty(hits);
+    }
 }

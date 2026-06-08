@@ -4,10 +4,8 @@ using Foreman.Core.Events;
 using Foreman.Core.Models;
 using Foreman.Core.Settings;
 using H.NotifyIcon;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Interop;
 using System.Windows.Threading;
 
 namespace Foreman.App.Tray;
@@ -217,12 +215,7 @@ public sealed class TrayController : IEventSink, IDisposable
             w.Show();
             _dashboardWindow = w;  // assign only after Show() succeeds
         }
-
-        _dashboardWindow.Activate();
-        _dashboardWindow.Focus();
-        var hwnd = new WindowInteropHelper(_dashboardWindow).Handle;
-        if (hwnd != IntPtr.Zero)
-            SetForegroundWindow(hwnd);
+        WindowActivation.Surface(_dashboardWindow);
     }
 
     private void OpenLogWindow()
@@ -231,20 +224,10 @@ public sealed class TrayController : IEventSink, IDisposable
         {
             var w = new LogWindow();
             w.Show();
-            _logWindow = w;  // assign only after Show() succeeds — prevents Activate() on a bad window
+            _logWindow = w;  // assign only after Show() succeeds — prevents activating a bad window
         }
-
-        // Force the log window to the front regardless of which app currently has focus.
-        // Activate() alone is silently ignored by Windows focus-stealing prevention rules.
-        _logWindow.Activate();
-        _logWindow.Focus();
-        var hwnd = new WindowInteropHelper(_logWindow).Handle;
-        if (hwnd != IntPtr.Zero)
-            SetForegroundWindow(hwnd);
+        WindowActivation.Surface(_logWindow);
     }
-
-    [DllImport("user32.dll")]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     private void OpenBehaviorMetricsWindow()
     {
@@ -258,10 +241,7 @@ public sealed class TrayController : IEventSink, IDisposable
                 KillHarness          ?? (_ => { }));
             _behaviorWindow.Show();
         }
-        else
-        {
-            _behaviorWindow.Activate();
-        }
+        WindowActivation.Surface(_behaviorWindow);
     }
 
     private void OpenProcessMonitorWindow()
@@ -271,10 +251,7 @@ public sealed class TrayController : IEventSink, IDisposable
             _processWindow = new ProcessMonitorWindow(GetProcessSnapshot ?? (() => []));
             _processWindow.Show();
         }
-        else
-        {
-            _processWindow.Activate();
-        }
+        WindowActivation.Surface(_processWindow);
     }
 
     private void OpenHarnessesWindow()
@@ -286,10 +263,7 @@ public sealed class TrayController : IEventSink, IDisposable
             _harnessesWindow = new HarnessesWindow(_settings, snap);
             _harnessesWindow.Show();
         }
-        else
-        {
-            _harnessesWindow.Activate();
-        }
+        WindowActivation.Surface(_harnessesWindow);
     }
 
     private void SendTestAlert()
@@ -320,10 +294,7 @@ public sealed class TrayController : IEventSink, IDisposable
             _settingsWindow = new SettingsWindow(_settings);
             _settingsWindow.Show();
         }
-        else
-        {
-            _settingsWindow.Activate();
-        }
+        WindowActivation.Surface(_settingsWindow);
     }
 
     private ContextMenu BuildMenu()

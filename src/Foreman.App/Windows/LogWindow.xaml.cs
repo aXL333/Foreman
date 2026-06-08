@@ -184,6 +184,11 @@ public partial class LogWindow : Window, IEventSink
 
     private void ScrollToBottom()
     {
+        // Guard: AutoScrollCheck's IsChecked="True" fires Checked during InitializeComponent()
+        // — before the constructor assigns _view and before EventList exists. Same XAML-init
+        // hazard as SeverityFilter.SelectionChanged.
+        if (_view is null || EventList is null) return;
+
         // Enumerate the filtered view to find the last item
         object? last = null;
         foreach (var item in _view) last = item;
