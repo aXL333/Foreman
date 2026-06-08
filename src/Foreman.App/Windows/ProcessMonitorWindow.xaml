@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Foreman — Process Monitor"
         Icon="/Resources/foreman.ico"
-        Width="880" Height="520"
-        MinWidth="640" MinHeight="340"
+        Width="1080" Height="520"
+        MinWidth="680" MinHeight="340"
         Background="{StaticResource BackgroundBrush}"
         Foreground="{StaticResource TextPrimaryBrush}"
         FontFamily="Segoe UI, Arial">
@@ -79,6 +79,9 @@
                           Content="Hide terminated"
                           IsChecked="True"
                           Checked="FilterChanged" Unchecked="FilterChanged" />
+                <TextBlock Text="I/O = total I/O · Net needs Run Elevated"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           FontSize="10" VerticalAlignment="Center" Margin="16,0,0,0" />
             </StackPanel>
 
             <!-- live refresh indicator + count -->
@@ -104,14 +107,19 @@
                   VirtualizingStackPanel.IsVirtualizing="True">
             <ListView.View>
                 <GridView>
-                    <GridViewColumn Header="State"  Width="78"  DisplayMemberBinding="{Binding StateLabel}" />
-                    <GridViewColumn Header="PID"    Width="58"  DisplayMemberBinding="{Binding Pid}" />
-                    <GridViewColumn Header="Name"   Width="150" DisplayMemberBinding="{Binding Name}" />
-                    <GridViewColumn Header="Type"   Width="110" DisplayMemberBinding="{Binding HarnessType}" />
-                    <GridViewColumn Header="Uptime" Width="70"  DisplayMemberBinding="{Binding UptimeLabel}" />
-                    <GridViewColumn Header="Silent" Width="60"  DisplayMemberBinding="{Binding SilentLabel}" />
-                    <GridViewColumn Header="Parent" Width="58"  DisplayMemberBinding="{Binding ParentPid}" />
-                    <GridViewColumn Header="Command line" Width="260" DisplayMemberBinding="{Binding CommandLine}" />
+                    <GridViewColumn Header="State"  Width="74"  DisplayMemberBinding="{Binding StateLabel}" />
+                    <GridViewColumn Header="PID"    Width="52"  DisplayMemberBinding="{Binding Pid}" />
+                    <GridViewColumn Header="Name"   Width="140" DisplayMemberBinding="{Binding Name}" />
+                    <GridViewColumn Header="Type"   Width="92"  DisplayMemberBinding="{Binding HarnessType}" />
+                    <GridViewColumn Header="CPU"    Width="50"  DisplayMemberBinding="{Binding CpuLabel}" />
+                    <GridViewColumn Header="Mem"    Width="64"  DisplayMemberBinding="{Binding MemLabel}" />
+                    <GridViewColumn Header="I/O"    Width="66"  DisplayMemberBinding="{Binding IoLabel}" />
+                    <GridViewColumn Header="GPU"    Width="50"  DisplayMemberBinding="{Binding GpuLabel}" />
+                    <GridViewColumn Header="Net"    Width="44"  DisplayMemberBinding="{Binding NetLabel}" />
+                    <GridViewColumn Header="Uptime" Width="62"  DisplayMemberBinding="{Binding UptimeLabel}" />
+                    <GridViewColumn Header="Silent" Width="56"  DisplayMemberBinding="{Binding SilentLabel}" />
+                    <GridViewColumn Header="Parent" Width="54"  DisplayMemberBinding="{Binding ParentPid}" />
+                    <GridViewColumn Header="Command line" Width="220" DisplayMemberBinding="{Binding CommandLine}" />
                 </GridView>
             </ListView.View>
             <ListView.ItemContainerStyle>
