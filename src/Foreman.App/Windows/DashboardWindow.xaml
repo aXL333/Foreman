@@ -164,6 +164,10 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="10" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
                 <Border Grid.Column="0" CornerRadius="8"
@@ -217,6 +221,35 @@
                                    Foreground="{StaticResource TextPrimaryBrush}"
                                    TextTrimming="CharacterEllipsis" />
                         <TextBlock Text="LAST EVENT"
+                                   Style="{StaticResource MetricCaption}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="8" CornerRadius="8"
+                        Background="{StaticResource SurfaceRaisedBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1" Padding="14,10">
+                    <StackPanel>
+                        <TextBlock x:Name="McpClientsLabel"
+                                   Text="0"
+                                   Style="{StaticResource MetricValue}" />
+                        <TextBlock Text="MCP CLIENTS"
+                                   Style="{StaticResource MetricCaption}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="10" CornerRadius="8"
+                        Background="{StaticResource SurfaceRaisedBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1" Padding="14,10">
+                    <StackPanel>
+                        <TextBlock x:Name="NetCaptureLabel"
+                                   Text="Off"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="NET CAPTURE"
                                    Style="{StaticResource MetricCaption}" />
                     </StackPanel>
                 </Border>
@@ -366,6 +399,7 @@
                     <Button Content="Process Monitor" Click="OpenProcessMonitorClick" Margin="0,0,8,0" />
                     <Button Content="Harnesses" Click="OpenHarnessesClick" Margin="0,0,8,0" />
                     <Button Content="Behavior Metrics" Click="OpenBehaviorMetricsClick" Margin="0,0,8,0" />
+                    <Button Content="Settings" Click="OpenSettingsClick" Margin="0,0,8,0" />
                     <Button Content="Event Log" Click="OpenLogClick" Style="{StaticResource PrimaryButton}" />
                 </StackPanel>
                 <TextBlock x:Name="FooterText"
