@@ -1,5 +1,6 @@
 using Foreman.Core.Behavior;
 using Foreman.Core.Events;
+using Foreman.Core.Mcp;
 using Foreman.Core.Models;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
@@ -471,6 +472,23 @@ public static class ForemanMcpTools
                 source,
                 $"Behavior metrics reset for '{harnessId}' via MCP."));
         }
+    }
+
+    [McpServerTool, Description(
+        "Lists the MCP servers Foreman discovered configured across your AI harnesses " +
+        "(name, transport, target, scope). Useful for spotting an unexpected or newly-added MCP server.")]
+    public static object ListMcpServers()
+    {
+        var state = _state ?? new ForemanState();
+        var servers = state.GetMcpInventory?.Invoke() ?? [];
+        return new
+        {
+            servers = servers
+                .OrderBy(s => s.Harness, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(s => new { s.Harness, s.Name, s.Transport, s.Target, s.Scope })
+                .ToArray(),
+        };
     }
 
     private static bool TargetMatches(string[] targets, string targetHarnessId) =>

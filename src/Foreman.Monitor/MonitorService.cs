@@ -20,9 +20,11 @@ public sealed class MonitorService : IDisposable
     public ProcessTreeTracker Tree     { get; }
     public BehaviorTracker    Behavior { get; }
     public ProfileMatcher     Profiles { get; }
+    public McpInventoryMonitor McpInventory { get; }
 
     public MonitorService(ForemanSettings settings, EventBus bus)
     {
+        McpInventory = new McpInventoryMonitor(bus);
         Tree = new ProcessTreeTracker();
         _profileStore = new ProfileStore(settings.ProfilesDirectory);
         _profileStore.Initialize();
@@ -46,6 +48,7 @@ public sealed class MonitorService : IDisposable
         _started = true;
         _watcher.Start();
         _poller.Start();
+        McpInventory.Start();
     }
 
     public void Dispose()
@@ -53,5 +56,6 @@ public sealed class MonitorService : IDisposable
         _poller.Dispose();
         _watcher.Dispose();
         _profileStore.Dispose();
+        McpInventory.Dispose();
     }
 }

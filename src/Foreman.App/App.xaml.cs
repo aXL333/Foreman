@@ -53,6 +53,7 @@ public partial class App : Application
         _mcpHost.State.GetProfileByName      = name => _monitor.Profiles.Get(name);
         _mcpHost.State.GetDefaultProfileNameByHarnessId = Foreman.Core.Models.HarnessIntegrationRegistry.GetDefaultProfileName;
         _mcpHost.State.FindHarnessAncestorByPid = pid => _monitor.Tree.FindHarnessTypeAncestor(pid);
+        _mcpHost.State.GetMcpInventory       = () => _monitor.McpInventory.Current;
         _tray.GetProcessSnapshot            = () => _monitor.Tree.GetAll();
         _tray.GetMcpClientCount             = () => _mcpHost.Sessions.Count;
 
