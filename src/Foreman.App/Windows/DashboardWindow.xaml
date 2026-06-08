@@ -104,7 +104,7 @@
                                    FontSize="15" FontWeight="Bold"
                                    FontFamily="Segoe UI, Arial"
                                    Foreground="{StaticResource AccentBrush}" />
-                        <TextBlock Text="harness watch"
+                        <TextBlock Text="agent safety"
                                    FontSize="10"
                                    Foreground="{StaticResource TextMutedBrush}"
                                    Margin="0,1,0,0" />

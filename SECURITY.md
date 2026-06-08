@@ -1,6 +1,6 @@
 # Security Policy
 
-Foreman is a Windows-native watchdog for AI coding agents. It runs in the
+Foreman is a Windows-native safety monitor for AI coding agents. It runs in the
 system tray at medium integrity (no admin), watches harness processes via WMI,
 applies a heuristic command-analysis engine, and exposes a local MCP server on
 `http://localhost:54321/mcp` (port configurable). Because it inspects process
@@ -96,11 +96,10 @@ and no telemetry. Scope is bounded accordingly.
 
 - **Detection coverage gaps.** A command that a real attacker could run but that
   Foreman's heuristics do not flag is a missed detection, not a vulnerability.
-  Foreman is described as "a smart AV, not a policy enforcer" — it is a
-  best-effort watchdog and is trivially bypassable by a determined adversary on
-  the same machine. False negatives (and false positives) are bugs or tuning
-  requests; please file those as normal issues, and see `data/patterns/*.json`
-  for the rule definitions.
+  Foreman is a best-effort safety monitor, not a sandbox or policy enforcer, and
+  is trivially bypassable by a determined adversary on the same machine. False
+  negatives (and false positives) are bugs or tuning requests; please file those
+  as normal issues, and see `data/patterns/*.json` for the rule definitions.
 - **The agents being monitored.** Vulnerabilities in Claude Code, Codex,
   Gemini CLI, or any other harness belong to those projects, not Foreman.
 - **Local attacker already at your privilege level.** Foreman runs at medium

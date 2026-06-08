@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="docs/assets/foreman-social-preview.png" alt="Foreman - a tray watchdog for AI coding agents">
+  <img src="docs/assets/foreman-social-preview.png" alt="Foreman - safety oversight for AI coding agents">
 </p>
 
 <h1 align="center">Foreman</h1>
 
 <p align="center">
-  A Windows tray watchdog for AI coding agents with process-tree monitoring, command-risk alerts, behavior escalation and an MCP bridge agents can query for their own oversight.
+  A Windows safety monitor for AI coding agents: watch for unwanted behaviour, inspect risky actions and route one AI to audit another.
 </p>
 
 <p align="center">
-  <strong>Built to feel calm, useful and accountable during real agent work.</strong>
+  <strong>Built to keep agent work visible, accountable and reviewable.</strong>
 </p>
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
@@ -20,22 +20,23 @@
 
 ## Why
 
-AI coding agents are good at starting things and bad at cleaning up. Over a long session a harness will leave orphaned shell processes behind, jam a hook that never returns, and spawn child processes that outlive a harness restart. Once in a while it will also run a command that does real damage — wiping a directory, piping a remote script straight into a shell, reaching for credential-dumping tooling.
+AI coding agents can act quickly across shells, files, credentials and networked tools. Most of the time that is useful. Sometimes it is surprising, unsafe or simply not what you asked for. Foreman exists so a human operator can keep an eye on that behaviour without reading every terminal line.
 
-Foreman is a watchdog for that class of problem, not a policy enforcer. It runs at medium integrity (no admin, no UAC), sits in the tray, and tells you when an agent is making a mess or about to do something you'd want to stop. Think smart AV for agent sessions, not a sandbox.
+Foreman is a safety monitor, not a sandbox or policy enforcer. It runs at medium integrity (no admin, no UAC), sits in the tray and raises explainable alerts when an agent does something worth reviewing. Its MCP bridge also lets one harness or API act as the auditor for another, so you can use a second AI to triage the first AI's actions.
 
 ## What it does
 
-- Watches the process trees your agents create and notices when a child process is **hung** (silent past a threshold) or **orphaned** (parent harness gone, child still running).
-- Flags shell commands by category — destructive/deletion commands, network-borne code execution, privilege escalation, credential-access tooling, and Windows-specific defense-evasion or persistence.
+- Watches process trees so spawned commands, hung children and orphaned processes remain visible.
+- Flags shell commands by category — destructive/deletion commands, network-borne code execution, privilege escalation, credential-access tooling and Windows-specific defense-evasion or persistence.
 - Tracks per-agent behavior across a session and **escalates** through four levels (Watch → Alert → Alarm → Emergency) as alerts accumulate.
 - Classifies known agents automatically (Claude Code, Codex, and others) from process name and command line; you can register custom executable names.
-- Exposes an **MCP server** an agent can call to check its own status, pre-flight a command, see whether Foreman has raised an alarm about it, and announce task boundaries.
+- Exposes an **MCP server** an agent can call to check its own status, pre-flight a command, see whether Foreman has raised an alarm about it and announce task boundaries.
+- Routes LLM triage so a user-nominated harness or API can review another agent's actions.
 - Keeps a searchable, exportable event log and an at-a-glance dashboard, with tray notifications for critical alerts.
 
 ## Product standards
 
-Foreman is security tooling, but it should not feel hostile or ugly. The target experience is a quiet tray app people want to keep running: clear status at a glance, explainable alerts, fast detail views and enough visual care that contributors can trust the project is maintained deliberately.
+Foreman is safety tooling, but it should not feel hostile or ugly. The target experience is a quiet tray app people want to keep running: clear status at a glance, explainable alerts, fast detail views and enough visual care that contributors can trust the project is maintained deliberately.
 
 That standard matters for FOSS too. Design polish, documentation, tests and installer quality are treated as first-class work alongside detection coverage.
 
@@ -60,11 +61,11 @@ Anything else can be added as a custom harness executable name in settings.
 
 Four moving parts, kept deliberately separate.
 
-**Tray app.** A WPF tray icon (green / amber / red) is the whole UI surface. Left-click opens the Dashboard (per-agent status chips and a recent-alert feed). Double-click opens the Event Log (filter, search, export). The right-click menu also reaches Process Monitor, Harnesses, Behavior Metrics, Settings, and a "Send test alert" action. A critical alert raises a tray notification; clicking it opens an Alert window that explains why the command is risky and what to do.
+**Tray app.** A WPF tray icon (green / amber / red) is the main operator surface. Left-click opens the Dashboard (session metrics, per-agent status chips and a recent-alert feed). Double-click opens the Event Log (filter, search, export). The right-click menu also reaches Process Monitor, Harnesses, Behavior Metrics, Settings and a "Send test alert" action. A critical alert raises a tray notification; clicking it opens an Alert window that explains why the action is risky and what to do.
 
 **Heuristic engine.** Around 30 compiled-regex rules across five categories, loaded from JSON. Each rule carries an id, name, severity (info / low / medium / high / critical), description, target platforms, and false-positive tags. A false-positive filter suppresses Foreman's own process and known-safe contexts. The rule sources live in [`data/patterns/`](data/patterns/) and are embedded into `Foreman.Core` at build time — read those files if you want the exact coverage; they are the source of truth, not this README.
 
-**Process monitoring.** A WMI watcher subscribes to process create/terminate events. A process-tree tracker maps harness children, an I/O poller samples counters (`GetProcessIoCounters`) to tell "working" from "stuck," and hang/orphan detectors raise events when a child goes silent or loses its parent.
+**Process monitoring.** A WMI watcher subscribes to process create/terminate events. A process-tree tracker maps harness children, an I/O poller samples counters (`GetProcessIoCounters`) to tell "working" from "stuck" and hang/orphan detectors raise events when a child goes silent or loses its parent.
 
 **Behavior escalation.** Each agent session accumulates a profile. Configurable thresholds — medium- and high-alert counts, unique rules fired, distinct categories touched, total alerts, and a set of high-risk rule IDs — drive escalation across four levels:
 
@@ -191,4 +192,4 @@ GPL-3.0-or-later. See [LICENSE](LICENSE). Contributions are accepted under the s
 
 ## Support
 
-Foreman is free and GPL. If it has saved you from a mess and you want to chip in, there's a Ko-fi: <https://ko-fi.com/axl333>.
+Foreman is free and GPL. If it helped you keep agent work safer and you want to chip in, there's a Ko-fi: <https://ko-fi.com/axl333>.
