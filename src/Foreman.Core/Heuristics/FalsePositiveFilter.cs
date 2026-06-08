@@ -23,14 +23,16 @@ public static class FalsePositiveFilter
         ".claude/hooks/",
     ];
 
-    // "Launcher hygiene" rules: how a harness legitimately invokes its own hook scripts.
-    // Bypassing the execution policy and skipping the profile is expected when a harness runs
-    // a user-configured hook — it is not the agent doing something suspicious. We suppress
-    // ONLY these launcher rules for hook paths; anything the hook script then does spawns its
-    // own processes, which Foreman still analyzes normally.
+    // "Launcher hygiene": a harness running its OWN configured hook scripts sets
+    // -ExecutionPolicy Bypass / -NoProfile. That is expected infrastructure, not the agent
+    // misbehaving, so we suppress that single rule for hook paths; anything the hook script
+    // then does spawns its own processes, which Foreman still analyzes normally.
+    //
+    // Encoded-command detection (win-001) is deliberately NOT here: a base64 -EncodedCommand
+    // payload is a primary obfuscation signal, and gating its suppression on a path substring
+    // would let anyone evade it by planting ".claude\hooks\" anywhere in the command line.
     private static readonly HashSet<string> _launcherHygieneRules = new(StringComparer.OrdinalIgnoreCase)
     {
-        "win-001",   // encoded command
         "win-002",   // execution policy bypass
     };
 
