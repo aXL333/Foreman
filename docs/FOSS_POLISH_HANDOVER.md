@@ -33,17 +33,9 @@ Latest local result:
 
 This checkout originally had no configured Git remote. A private GitHub repository was created at `https://github.com/aXL333/Foreman` and configured as `origin`.
 
-The push is still blocked: GitHub rejected `main` because the current GitHub CLI OAuth token has scopes `gist`, `read:org`, and `repo`, but not `workflow`. Pushing this repository requires `workflow` scope because `.github/workflows/ci.yml` and `.github/workflows/release.yml` are part of the history.
+`main` has been pushed and is tracking `origin/main`.
 
-Attempted recovery:
-
-```powershell
-gh auth refresh -h github.com -s workflow
-```
-
-That command timed out waiting for auth completion. SSH push is also unavailable on this machine: `ssh -o BatchMode=yes -T git@github.com` returned `Permission denied (publickey)`.
-
-To finish the push, refresh GitHub CLI auth with `workflow` scope in an interactive terminal, then run:
+Note: the first push was rejected because the GitHub CLI OAuth token did not initially have `workflow` scope, which is required because `.github/workflows/ci.yml` and `.github/workflows/release.yml` are part of the history. After the auth refresh attempt, a direct `git push -u origin main` succeeded.
 
 ```powershell
 git push -u origin main
