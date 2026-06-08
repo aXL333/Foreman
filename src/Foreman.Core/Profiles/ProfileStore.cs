@@ -45,6 +45,8 @@ public sealed class ProfileStore : IDisposable
             // embedded built-in profiles
             LoadBuiltIn("claude-code-default");
             LoadBuiltIn("codex-default");
+            LoadBuiltIn("t3-code-default");
+            LoadBuiltIn("opencode-default");
 
             // user profiles from disk (override built-ins by name)
             foreach (var file in Directory.GetFiles(_profilesDirectory, "*.json"))

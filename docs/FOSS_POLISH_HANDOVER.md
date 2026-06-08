@@ -13,6 +13,7 @@ Date: 2026-06-08
 - Hang alerts now attribute both the direct spawner process and the owning harness when they differ.
 - MCP alert payloads include spawner and owner metadata so another harness/API can audit the event without reconstructing stale process-tree state.
 - MCP/profile integration now has integration instructions, validation, audit preference listing, and route selection.
+- T3 Code and OpenCode are built-in harnesses with classifier rules, default profiles, MCP integration metadata, and audit-routing defaults.
 
 ## Verification
 
@@ -25,9 +26,9 @@ dotnet build .\src\Foreman.App\Foreman.App.csproj -c Release
 
 Latest local result:
 
-- Tests: 54 passed, 0 failed.
+- Tests: 66 passed, 0 failed.
 - Release app build: succeeded, 0 warnings, 0 errors.
-- Running instance after bounce: `Foreman.App` PID 77264.
+- Running instance after bounce: `Foreman.App` PID 77812.
 - Health endpoint: `http://localhost:54321/health` returned `status: ok`.
 
 ## Push Status

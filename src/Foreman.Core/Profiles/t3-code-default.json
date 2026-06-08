@@ -1,0 +1,47 @@
+{
+  "name": "t3-code-default",
+  "version": "1.0",
+  "description": "Default profile for T3 Code control-plane processes",
+  "processMatch": {
+    "executableNames": ["t3 code.exe", "t3code.exe", "t3-code.exe"],
+    "commandLineContains": ["pingdotgg/t3code", "t3code/apps/desktop", "t3code\\apps\\desktop", "t3 code/resources/app", "t3 code\\resources\\app", "t3.codes"],
+    "parentExecutableNames": []
+  },
+  "fileSystem": {
+    "allowedWritePaths": [
+      "%USERPROFILE%\\*",
+      "%TEMP%\\t3-code-*\\*",
+      "%LOCALAPPDATA%\\T3 Code\\*",
+      "%APPDATA%\\T3 Code\\*"
+    ],
+    "deniedPaths": [
+      "C:\\Windows\\*",
+      "C:\\Windows\\System32\\*",
+      "%USERPROFILE%\\.ssh\\*",
+      "%USERPROFILE%\\.aws\\*",
+      "%USERPROFILE%\\.gnupg\\*"
+    ],
+    "enforceMode": "alert"
+  },
+  "commands": {
+    "blockedPatterns": ["cred-001", "cred-004", "cred-005", "priv-002", "priv-003", "priv-004", "win-004"],
+    "enforceMode": "alert"
+  },
+  "processLimits": {
+    "maxRuntimeMinutes": 480,
+    "hangThresholdMinutes": 10,
+    "hookJamThresholdMinutes": 5
+  },
+  "claudeCodeIntegration": {
+    "readSettingsJson": false,
+    "trustGrantedPermissions": false
+  },
+  "alerts": {
+    "notifyOnHang": true,
+    "notifyOnOrphan": true,
+    "notifyOnViolation": true,
+    "suppressDuplicatesWindowMinutes": 5,
+    "trustedHookPathMarkers": [],
+    "launcherSuppressedRuleIds": []
+  }
+}

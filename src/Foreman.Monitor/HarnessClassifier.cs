@@ -25,6 +25,19 @@ public static class HarnessClassifier
             "codex"
         ),
         (
+            ["t3 code.exe", "t3code.exe", "t3-code.exe"],
+            ["pingdotgg/t3code", "t3code/apps/desktop", @"t3code\apps\desktop",
+             "t3 code/resources/app", @"t3 code\resources\app", "t3.codes"],
+            [],
+            "t3-code"
+        ),
+        (
+            ["opencode.exe", "opencode"],
+            ["opencode-ai", "@opencode-ai", "opencode/bin", "opencode/dist", ".opencode/"],
+            [],
+            "opencode"
+        ),
+        (
             ["gemini.exe"],
             ["@google/gemini-cli", "@google-labs/gemini-cli", "gemini-cli/dist", "google-gemini-cli"],
             [],
@@ -119,4 +132,3 @@ public static class HarnessClassifier
         }
     }
 }
-

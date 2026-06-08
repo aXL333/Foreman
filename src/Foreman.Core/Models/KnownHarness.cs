@@ -18,6 +18,8 @@ public static class KnownHarnesses
     [
         new("claude-code",    "Claude Code",            "Anthropic",         "AI coding agent with file editing and bash execution"),
         new("codex",          "Codex CLI",              "OpenAI",            "OpenAI's command-line AI coding agent"),
+        new("t3-code",        "T3 Code",                "T3 Tools",          "Open-source control plane for coding agents"),
+        new("opencode",       "OpenCode",               "Anomaly",           "Open-source terminal and desktop AI coding agent"),
         new("gemini-cli",     "Gemini CLI",             "Google",            "Google's terminal-based AI coding agent"),
         new("amazon-q",       "Amazon Q Developer",     "Amazon / AWS",      "AWS AI development assistant CLI"),
         new("aider",          "Aider",                  "Paul Gauthier",     "AI pair programming in your terminal"),
