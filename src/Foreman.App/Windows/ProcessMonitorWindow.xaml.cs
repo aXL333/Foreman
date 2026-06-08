@@ -9,6 +9,7 @@ public partial class ProcessMonitorWindow : Window
 {
     private readonly Func<IEnumerable<ProcessRecord>> _getSnapshot;
     private readonly DispatcherTimer _timer;
+    private readonly ResourceSampler _sampler = new();
     private ProcessMonitorVm? _selected;
 
     public ProcessMonitorWindow(Func<IEnumerable<ProcessRecord>> getSnapshot)
@@ -35,13 +36,19 @@ public partial class ProcessMonitorWindow : Window
         bool harnessOnly    = HarnessOnlyCheck.IsChecked   == true;
         bool hideTerminated = HideTerminatedCheck.IsChecked == true;
 
-        var filtered = records
+        var filteredRecords = records
             .Where(p => !harnessOnly    || p.IsHarness)
             .Where(p => !hideTerminated || p.State != ProcessState.Terminated)
             .OrderByDescending(p => (int)p.State)        // hanging/orphaned first
             .ThenBy(p => p.HarnessType ?? "zzz")
             .ThenBy(p => p.Pid)
-            .Select(p => new ProcessMonitorVm(p))
+            .ToList();
+
+        // Live resource metrics (CPU/mem/I/O/GPU) for just the rows we're about to show.
+        var metrics = _sampler.Sample(filteredRecords.Select(p => p.Pid).ToList());
+
+        var filtered = filteredRecords
+            .Select(p => new ProcessMonitorVm(p, metrics.TryGetValue(p.Pid, out var m) ? m : null))
             .ToList();
 
         ProcessList.ItemsSource = filtered;
@@ -95,6 +102,7 @@ public partial class ProcessMonitorWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _timer.Stop();
+        _sampler.Dispose();
         base.OnClosed(e);
     }
 }
@@ -115,7 +123,14 @@ public sealed class ProcessMonitorVm
     public string SilentLabel    { get; }
     public Brush  RowForeground  { get; }
 
-    public ProcessMonitorVm(ProcessRecord p)
+    // ── Live resource metrics ────────────────────────────────────────────────
+    public string CpuLabel { get; }
+    public string MemLabel { get; }
+    public string IoLabel  { get; }
+    public string GpuLabel { get; }
+    public string NetLabel { get; } = "n/a";   // per-process net needs Run Elevated (ETW)
+
+    public ProcessMonitorVm(ProcessRecord p, ResourceSampler.Metrics? metrics)
     {
         Pid             = p.Pid;
         Name            = p.Name;
@@ -123,6 +138,19 @@ public sealed class ProcessMonitorVm
         CommandLine     = Truncate(p.CommandLine, 80);
         ParentPid       = p.ParentPid;
         HarnessType     = p.HarnessType ?? (p.IsHarness ? "harness" : "—");
+
+        // Terminated rows have no live process to sample.
+        if (p.State == ProcessState.Terminated || metrics is not { } m)
+        {
+            CpuLabel = MemLabel = IoLabel = GpuLabel = "—";
+        }
+        else
+        {
+            CpuLabel = m.CpuPercent < 0.5 ? "0%" : $"{m.CpuPercent:0}%";
+            MemLabel = m.MemoryBytes > 0 ? FormatBytes(m.MemoryBytes) : "—";
+            IoLabel  = FormatRate(m.IoBytesPerSec);
+            GpuLabel = m.GpuPercent is { } g ? (g < 0.5 ? "0%" : $"{g:0}%") : "n/a";
+        }
 
         StateLabel = p.State switch
         {
@@ -157,4 +185,15 @@ public sealed class ProcessMonitorVm
 
     private static string Truncate(string s, int max) =>
         s.Length <= max ? s : s[..max] + "…";
+
+    private static string FormatBytes(long b) =>
+        b >= 1L << 30 ? $"{b / (double)(1 << 30):0.0} GB" :
+        b >= 1L << 20 ? $"{b / (double)(1 << 20):0} MB" :
+        b >= 1L << 10 ? $"{b / (double)(1 << 10):0} KB" : $"{b} B";
+
+    private static string FormatRate(double bytesPerSec) =>
+        bytesPerSec < 1            ? "—" :
+        bytesPerSec < 1024         ? $"{bytesPerSec:0} B/s" :
+        bytesPerSec < 1024 * 1024  ? $"{bytesPerSec / 1024:0} KB/s" :
+                                     $"{bytesPerSec / (1024 * 1024):0.0} MB/s";
 }

@@ -10,6 +10,8 @@
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="1.4.0" />
     <!-- WMI process events -->
     <PackageVersion Include="System.Management" Version="9.0.5" />
+    <!-- Per-process GPU utilization (GPU Engine perf counters) -->
+    <PackageVersion Include="System.Diagnostics.PerformanceCounter" Version="9.0.5" />
     <!-- ETW (Phase 2) -->
     <PackageVersion Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.13" />
     <!-- Windows toast notifications -->
