@@ -1,6 +1,8 @@
 using Foreman.Core.Behavior;
 using Foreman.Core.Events;
 using Foreman.Core.Models;
+using Foreman.Core.Settings;
+using System.Text;
 using System.Windows;
 using System.Windows.Media;
 
@@ -31,6 +33,15 @@ public partial class AlertDetailWindow : Window
     /// attributed to its harness rather than shown as "not a tracked harness".
     /// </summary>
     public static Func<int, ProcessRecord?>? GetHarnessAncestorByPid { get; set; }
+
+    /// <summary>Wired up by App.xaml.cs. Provides a live snapshot for auditor availability checks.</summary>
+    public static Func<IEnumerable<ProcessRecord>>? GetProcessSnapshot { get; set; }
+
+    /// <summary>Wired up by App.xaml.cs. Provides the user-defined LLM triage routing preferences.</summary>
+    public static Func<LlmTriageSettings>? GetLlmTriageSettings { get; set; }
+
+    /// <summary>Wired up by App.xaml.cs. Terminates the specific alert target process.</summary>
+    public static Func<int, bool>? KillProcessByPid { get; set; }
 
     private AlertDetailWindow(ForemanEvent evt)
     {
@@ -73,6 +84,389 @@ public partial class AlertDetailWindow : Window
         }
         Close();
     }
+
+    private void AskHarnessClick(object sender, RoutedEventArgs e)
+    {
+        var targetHarnessId = ResolveTargetHarnessId();
+        var route = ResolveAuditRoute(targetHarnessId, _event.Severity);
+        var prompt = BuildAuditPrompt(targetHarnessId, route.Selected);
+
+        try
+        {
+            Clipboard.SetText(prompt);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Could not copy the audit prompt to the clipboard.\n\n{ex.GetType().Name}: {ex.Message}",
+                "Foreman - Ask Harness",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var destination = route.Selected is null
+            ? $"{route.Reason}\n\nThe audit prompt has still been copied so you can paste it into the harness or API of your choice."
+            : BuildRouteMessage(route);
+
+        EventBus.Instance.Publish(new InfoEvent(
+            DateTimeOffset.UtcNow,
+            "Foreman",
+            $"Audit prompt prepared for alert [{_event.Id}] via {route.Selected?.DisplayName ?? "manual route"}"));
+
+        MessageBox.Show(
+            destination + "\n\nPrompt copied to clipboard.",
+            "Foreman - Ask Harness",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void KillProcessClick(object sender, RoutedEventArgs e)
+    {
+        var pid = ResolveTargetPid();
+        if (pid is null)
+        {
+            MessageBox.Show(
+                "This alert does not identify a single process to terminate. Use Behavior Metrics to kill an entire harness.",
+                "Foreman - Kill/End Process",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var processName = ResolveTargetProcessName() ?? "process";
+        var result = MessageBox.Show(
+            $"Kill/end \"{processName}\" (pid {pid.Value})?\n\nThis will immediately terminate the process tree rooted at this alert target.",
+            "Foreman - Confirm Kill",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (result != MessageBoxResult.Yes) return;
+
+        var killed = KillProcessByPid?.Invoke(pid.Value) ?? false;
+        if (!killed)
+        {
+            EventBus.Instance.Publish(new InfoEvent(
+                DateTimeOffset.UtcNow,
+                "Foreman",
+                $"Kill/end failed for alert [{_event.Id}] target pid {pid.Value}"));
+
+            MessageBox.Show(
+                $"Foreman could not terminate pid {pid.Value}. It may have already exited, or Windows may have denied access.",
+                "Foreman - Kill/End Process",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        _event.Acknowledged = true;
+        EventBus.Instance.Publish(new InfoEvent(
+            DateTimeOffset.UtcNow,
+            "Foreman",
+            $"Killed alert target \"{processName}\" (pid {pid.Value}) for alert [{_event.Id}]"));
+
+        MessageBox.Show(
+            $"Terminated \"{processName}\" (pid {pid.Value}).",
+            "Foreman - Kill/End Process",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+        Close();
+    }
+
+    private string BuildAuditPrompt(string? targetHarnessId, AuditCandidate? route)
+    {
+        var vm = DataContext as AlertDetailVm;
+        var targetPid = ResolveTargetPid();
+        var processName = ResolveTargetProcessName();
+        var liveProcess = targetPid is int pid ? GetProcessByPid?.Invoke(pid) : null;
+        var commandLine = ResolveTargetCommandLine(liveProcess);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Foreman alert audit request");
+        sb.AppendLine();
+        sb.AppendLine("You are acting as an independent safety auditor for another AI coding harness or its child process.");
+        sb.AppendLine("Decide whether this alert is expected, benign-but-stuck, risky, or suspicious. Recommend one concrete next action.");
+        sb.AppendLine();
+        sb.AppendLine("Alert");
+        sb.AppendLine($"- Id: {_event.Id}");
+        sb.AppendLine($"- Type: {vm?.EventTypeLabel ?? _event.GetType().Name}");
+        sb.AppendLine($"- Severity: {_event.Severity}");
+        sb.AppendLine($"- Source: {_event.Source}");
+        sb.AppendLine($"- Timestamp: {_event.Timestamp:O}");
+        sb.AppendLine($"- Message: {_event.Message}");
+        sb.AppendLine();
+        sb.AppendLine("Target");
+        sb.AppendLine($"- Harness being audited: {Blank(targetHarnessId, "unknown")}");
+        sb.AppendLine($"- Process: {Blank(processName, "unknown")}{(targetPid is int p ? $" (pid {p})" : "")}");
+        if (liveProcess is not null)
+        {
+            sb.AppendLine($"- Parent pid: {liveProcess.ParentPid}");
+            sb.AppendLine($"- Executable: {Blank(liveProcess.ExecutablePath, "unknown")}");
+            sb.AppendLine($"- Live state: {liveProcess.State}");
+            sb.AppendLine($"- Uptime minutes: {liveProcess.UptimeMinutes}");
+            sb.AppendLine($"- Silent minutes: {liveProcess.SilentMinutes}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(commandLine))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Command line");
+            sb.AppendLine(commandLine);
+        }
+
+        AppendEventSpecificDetails(sb);
+
+        if (vm is not null)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Foreman assessment");
+            sb.AppendLine(vm.WhyDangerous);
+            sb.AppendLine();
+            sb.AppendLine("Foreman recommended action");
+            sb.AppendLine(vm.RecommendedAction);
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("Auditor route");
+        sb.AppendLine(route is null
+            ? "- No configured auditor route was selected."
+            : $"- Selected auditor: {route.DisplayName} ({route.AuditorType}:{route.AuditorId}), available: {route.Available}, running harness count: {route.RunningHarnessCount}");
+        if (route?.ApiEndpoint is { Length: > 0 } endpoint)
+            sb.AppendLine($"- API endpoint: {endpoint}");
+        if (route?.Model is { Length: > 0 } model)
+            sb.AppendLine($"- Model: {model}");
+
+        sb.AppendLine();
+        sb.AppendLine("Please answer with: verdict, evidence, recommended action, and whether the process should be left running, interrupted with Ctrl+C, killed, or escalated for manual review.");
+        return sb.ToString();
+    }
+
+    private void AppendEventSpecificDetails(StringBuilder sb)
+    {
+        switch (_event)
+        {
+            case CommandAlertEvent cmd:
+                sb.AppendLine();
+                sb.AppendLine("Command alert details");
+                sb.AppendLine($"- Rule: {cmd.RuleId} - {cmd.RuleName}");
+                sb.AppendLine($"- Rule description: {Blank(cmd.RuleDescription, "none")}");
+                break;
+
+            case HangDetectedEvent hang:
+                sb.AppendLine();
+                sb.AppendLine("Hang details");
+                sb.AppendLine($"- Uptime minutes: {hang.UptimeMinutes}");
+                sb.AppendLine($"- No-I/O minutes: {hang.SilentMinutes}");
+                sb.AppendLine($"- Direct spawner: {Blank(hang.SpawnerName, "unknown")}{(hang.SpawnerPid is int spid ? $" (pid {spid})" : "")}");
+                sb.AppendLine($"- Owning harness: {Blank(hang.ParentHarnessType, "unknown")}{(hang.ParentHarnessPid is int hpid ? $" (pid {hpid})" : "")}");
+                break;
+
+            case OrphanDetectedEvent orphan:
+                sb.AppendLine();
+                sb.AppendLine("Orphan details");
+                sb.AppendLine($"- Dead parent: {orphan.DeadParentName} (pid {orphan.DeadParentPid})");
+                sb.AppendLine($"- Orphan uptime minutes: {orphan.UptimeMinutes}");
+                break;
+
+            case PermissionViolationEvent perm:
+                sb.AppendLine();
+                sb.AppendLine("Permission violation details");
+                sb.AppendLine($"- Profile: {perm.ProfileName}");
+                sb.AppendLine($"- Violation type: {perm.ViolationType}");
+                sb.AppendLine($"- Detail: {perm.Detail}");
+                break;
+
+            case NonzeroExitEvent exit:
+                sb.AppendLine();
+                sb.AppendLine("Exit details");
+                sb.AppendLine($"- Exit code: {exit.ExitCode}");
+                sb.AppendLine($"- Parent harness pid: {exit.ParentHarnessPid?.ToString() ?? "unknown"}");
+                break;
+
+            case EscalationEvent esc:
+                sb.AppendLine();
+                sb.AppendLine("Escalation details");
+                sb.AppendLine($"- Harness: {esc.HarnessDisplayName} ({esc.HarnessId})");
+                sb.AppendLine($"- Old level: {esc.OldLevel}");
+                sb.AppendLine($"- New level: {esc.NewLevel}");
+                sb.AppendLine($"- Trigger: {esc.TriggerRuleId} - {esc.TriggerRuleName}");
+                sb.AppendLine($"- Reason: {esc.Reason}");
+                break;
+        }
+    }
+
+    private static string BuildRouteMessage(AuditRouteSelection route)
+    {
+        var selected = route.Selected!;
+        var availability = selected.AuditorType.Equals("api", StringComparison.OrdinalIgnoreCase)
+            ? (selected.Available ? "API endpoint configured." : "API endpoint is not configured.")
+            : (selected.Available
+                ? $"Detected {selected.RunningHarnessCount} running {selected.DisplayName} process{(selected.RunningHarnessCount == 1 ? "" : "es")}."
+                : $"{selected.DisplayName} is preferred but is not currently detected as running.");
+
+        var severityNote = route.UsedSeverityFallback
+            ? "\n\nNo automatic triage route matched this alert severity, so this manual ask used the same target preference list without the minimum-severity filter."
+            : "";
+
+        return $"Selected auditor: {selected.DisplayName} ({selected.AuditorType}:{selected.AuditorId}).\n{availability}{severityNote}";
+    }
+
+    private AuditRouteSelection ResolveAuditRoute(string? targetHarnessId, ForemanSeverity severity)
+    {
+        var settings = GetLlmTriageSettings?.Invoke();
+        if (settings is null)
+            return new AuditRouteSelection(null, "No LLM triage settings are available.", false);
+        if (!settings.Enabled)
+            return new AuditRouteSelection(null, "LLM triage routing is disabled in settings.", false);
+
+        var candidates = FindAuditCandidates(settings, targetHarnessId, severity, honorSeverity: true);
+        if (candidates.Count > 0)
+            return new AuditRouteSelection(candidates[0], "Auditor selected from user preference list.", false);
+
+        candidates = FindAuditCandidates(settings, targetHarnessId, severity, honorSeverity: false);
+        if (candidates.Count > 0)
+            return new AuditRouteSelection(candidates[0], "Auditor selected from user preference list for a manual ask.", true);
+
+        return new AuditRouteSelection(null, "No auditor preference matched this target harness.", false);
+    }
+
+    private static List<AuditCandidate> FindAuditCandidates(
+        LlmTriageSettings settings,
+        string? targetHarnessId,
+        ForemanSeverity severity,
+        bool honorSeverity)
+    {
+        var snapshot = GetProcessSnapshot?.Invoke().ToList() ?? [];
+        var targetKnown = !string.IsNullOrWhiteSpace(targetHarnessId);
+        var severityRank = (int)severity;
+
+        return settings.AuditorPreferences
+            .Where(p => p.Enabled)
+            .Where(p => !targetKnown || TargetMatches(p.TargetHarnessIds, targetHarnessId!))
+            .Where(p => !targetKnown ||
+                        !settings.PreventSelfAudit ||
+                        !string.Equals(p.AuditorId, targetHarnessId, StringComparison.OrdinalIgnoreCase))
+            .Where(p => !honorSeverity || HandlesSeverity(p.MinimumSeverities, severityRank))
+            .Select(p =>
+            {
+                var isApi = p.AuditorType.Equals("api", StringComparison.OrdinalIgnoreCase);
+                var runningHarnessCount = isApi
+                    ? 0
+                    : snapshot.Count(proc => string.Equals(proc.HarnessType, p.AuditorId, StringComparison.OrdinalIgnoreCase));
+                var available = isApi ? !string.IsNullOrWhiteSpace(p.ApiEndpoint) : runningHarnessCount > 0;
+
+                return new AuditCandidate(
+                    p.AuditorId,
+                    p.AuditorType,
+                    string.IsNullOrWhiteSpace(p.DisplayName) ? p.AuditorId : p.DisplayName,
+                    p.Priority,
+                    available,
+                    runningHarnessCount,
+                    p.ApiEndpoint,
+                    p.Model);
+            })
+            .OrderByDescending(c => c.Available)
+            .ThenByDescending(c => c.Priority)
+            .ThenBy(c => c.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private int? ResolveTargetPid() => _event switch
+    {
+        CommandAlertEvent cmd when cmd.ProcessId > 0 => cmd.ProcessId,
+        HangDetectedEvent hang when hang.ProcessId > 0 => hang.ProcessId,
+        OrphanDetectedEvent orphan when orphan.ProcessId > 0 => orphan.ProcessId,
+        PermissionViolationEvent perm when perm.ProcessId > 0 => perm.ProcessId,
+        NonzeroExitEvent exit when exit.ProcessId > 0 => exit.ProcessId,
+        _ => null,
+    };
+
+    private string? ResolveTargetProcessName() => _event switch
+    {
+        CommandAlertEvent cmd => GetProcessByPid?.Invoke(cmd.ProcessId)?.Name ?? ExtractProcessNameFromSource(cmd.Source),
+        HangDetectedEvent hang => hang.ProcessName,
+        OrphanDetectedEvent orphan => orphan.ProcessName,
+        PermissionViolationEvent perm => GetProcessByPid?.Invoke(perm.ProcessId)?.Name ?? ExtractProcessNameFromSource(perm.Source),
+        NonzeroExitEvent exit => exit.ProcessName,
+        EscalationEvent esc => esc.HarnessDisplayName,
+        _ => null,
+    };
+
+    private string? ResolveTargetHarnessId() => _event switch
+    {
+        CommandAlertEvent cmd => ResolveHarnessFromProcess(cmd.ProcessId),
+        HangDetectedEvent hang => FirstNonBlank(
+            hang.ParentHarnessType,
+            hang.ParentHarnessPid is int hp ? ResolveHarnessFromProcess(hp) : null,
+            ResolveHarnessFromProcess(hang.ProcessId)),
+        OrphanDetectedEvent orphan => ResolveHarnessFromProcess(orphan.ProcessId),
+        PermissionViolationEvent perm => ResolveHarnessFromProcess(perm.ProcessId),
+        NonzeroExitEvent exit => FirstNonBlank(
+            exit.ParentHarnessPid is int hp ? ResolveHarnessFromProcess(hp) : null,
+            ResolveHarnessFromProcess(exit.ProcessId)),
+        EscalationEvent esc => esc.HarnessId,
+        _ => null,
+    };
+
+    private string? ResolveTargetCommandLine(ProcessRecord? liveProcess)
+    {
+        if (_event is CommandAlertEvent cmd && !string.IsNullOrWhiteSpace(cmd.CommandLine))
+            return cmd.CommandLine;
+
+        return string.IsNullOrWhiteSpace(liveProcess?.CommandLine) ? null : liveProcess.CommandLine;
+    }
+
+    private static string? ResolveHarnessFromProcess(int pid)
+    {
+        if (pid <= 0) return null;
+
+        var rec = GetProcessByPid?.Invoke(pid);
+        if (!string.IsNullOrWhiteSpace(rec?.HarnessType))
+            return rec.HarnessType;
+
+        var ancestor = GetHarnessAncestorByPid?.Invoke(pid);
+        return string.IsNullOrWhiteSpace(ancestor?.HarnessType) ? null : ancestor.HarnessType;
+    }
+
+    private static string? ExtractProcessNameFromSource(string source)
+    {
+        var idx = source.IndexOf(" (pid", StringComparison.Ordinal);
+        return idx > 0 ? source[..idx] : null;
+    }
+
+    private static string? FirstNonBlank(params string?[] values) =>
+        values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+
+    private static string Blank(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value;
+
+    private static bool TargetMatches(string[] targets, string targetHarnessId) =>
+        targets.Length == 0 ||
+        targets.Any(t => t == "*" || string.Equals(t, targetHarnessId, StringComparison.OrdinalIgnoreCase));
+
+    private static bool HandlesSeverity(string[] minimumSeverities, int severityRank)
+    {
+        if (minimumSeverities.Length == 0) return true;
+        return minimumSeverities
+            .Select(s => Enum.TryParse<ForemanSeverity>(s, true, out var parsed) ? (int)parsed : -1)
+            .Where(r => r >= 0)
+            .Any(min => severityRank >= min);
+    }
+
+    private sealed record AuditRouteSelection(
+        AuditCandidate? Selected,
+        string Reason,
+        bool UsedSeverityFallback);
+
+    private sealed record AuditCandidate(
+        string AuditorId,
+        string AuditorType,
+        string DisplayName,
+        int Priority,
+        bool Available,
+        int RunningHarnessCount,
+        string? ApiEndpoint,
+        string? Model);
 
     private void CloseClick(object sender, RoutedEventArgs e) => Close();
 }
