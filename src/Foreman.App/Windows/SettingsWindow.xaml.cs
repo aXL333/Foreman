@@ -6,10 +6,12 @@ namespace Foreman.App.Windows;
 public partial class SettingsWindow : Window
 {
     private readonly ForemanSettings _settings;
+    private readonly Action<bool>? _onRunElevatedChanged;
 
-    public SettingsWindow(ForemanSettings settings)
+    public SettingsWindow(ForemanSettings settings, Action<bool>? onRunElevatedChanged = null)
     {
         _settings = settings;
+        _onRunElevatedChanged = onRunElevatedChanged;
         InitializeComponent();
         Populate();
     }
@@ -29,6 +31,7 @@ public partial class SettingsWindow : Window
         NotifyOrphanCheck.IsChecked  = _settings.NotifyOnOrphan;
         NotifyCriticalCheck.IsChecked = _settings.NotifyOnCriticalCommand;
         MonitorAllCheck.IsChecked    = _settings.MonitorAllProcesses;
+        RunElevatedCheck.IsChecked   = _settings.RunElevated;
 
         // Escalation thresholds
         AlertMediumBox.Text    = _settings.AlertLevelMediumCount.ToString();
@@ -78,9 +81,11 @@ public partial class SettingsWindow : Window
             .ToArray();
 
         // ── Commit ───────────────────────────────────────────────────────────
-        var portChanged = port != _settings.McpPort;
+        var portChanged        = port != _settings.McpPort;
+        var runElevatedChanged = (RunElevatedCheck.IsChecked == true) != _settings.RunElevated;
 
         _settings.McpPort                    = port;
+        _settings.RunElevated                = RunElevatedCheck.IsChecked == true;
         _settings.HangThresholdMinutes       = hang;
         _settings.HookJamThresholdMinutes    = hook;
         _settings.AlertSuppressWindowMinutes = suppress;
@@ -101,6 +106,10 @@ public partial class SettingsWindow : Window
         if (portChanged)
             MessageBox.Show("Port change takes effect after restart.", "Foreman",
                 MessageBoxButton.OK, MessageBoxImage.Information);
+
+        // Apply the elevation toggle (starts/stops the sidecar; enabling prompts UAC).
+        if (runElevatedChanged)
+            _onRunElevatedChanged?.Invoke(_settings.RunElevated);
 
         Close();
     }

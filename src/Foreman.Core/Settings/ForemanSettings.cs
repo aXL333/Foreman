@@ -11,6 +11,13 @@ public sealed class ForemanSettings
     public bool NotifyOnOrphan { get; set; } = true;
     public bool NotifyOnCriticalCommand { get; set; } = true;
     public bool MonitorAllProcesses { get; set; } = false; // false = harness children only
+
+    /// <summary>
+    /// Opt-in: launch an elevated, capture-only ETW sidecar so the Process Monitor can show
+    /// per-process Network throughput. Off by default — only the sidecar runs elevated; the main
+    /// app (UI, MCP server, kill action) stays at medium integrity. Toggling it on prompts UAC.
+    /// </summary>
+    public bool RunElevated { get; set; } = false;
     public string ProfilesDirectory { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Foreman", "profiles");
 

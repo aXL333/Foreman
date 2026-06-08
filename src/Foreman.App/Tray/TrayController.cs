@@ -43,6 +43,12 @@ public sealed class TrayController : IEventSink, IDisposable
     public Action<string>?                                    KillHarness           { get; set; }
     public Action<string>?                                    DisableHarness        { get; set; }
 
+    /// <summary>Injected from App — per-PID network bytes/sec from the elevated sidecar (null when off).</summary>
+    public Func<int, double?>?                                GetNetRate            { get; set; }
+
+    /// <summary>Injected from App — applies the Run Elevated toggle (persist + start/stop the sidecar).</summary>
+    public Action<bool>?                                      ApplyRunElevated      { get; set; }
+
     public TrayController(ForemanSettings settings, EventBus bus)
     {
         _settings = settings;
@@ -265,7 +271,7 @@ public sealed class TrayController : IEventSink, IDisposable
     {
         if (_processWindow is null || !_processWindow.IsLoaded)
         {
-            _processWindow = new ProcessMonitorWindow(GetProcessSnapshot ?? (() => []));
+            _processWindow = new ProcessMonitorWindow(GetProcessSnapshot ?? (() => []), GetNetRate);
             _processWindow.Show();
         }
         WindowActivation.Surface(_processWindow);
@@ -308,7 +314,7 @@ public sealed class TrayController : IEventSink, IDisposable
     {
         if (_settingsWindow is null || !_settingsWindow.IsLoaded)
         {
-            _settingsWindow = new SettingsWindow(_settings);
+            _settingsWindow = new SettingsWindow(_settings, ApplyRunElevated);
             _settingsWindow.Show();
         }
         WindowActivation.Surface(_settingsWindow);
