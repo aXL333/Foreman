@@ -1,6 +1,7 @@
 using Foreman.Core.Events;
 using Foreman.Core.Heuristics;
 using Foreman.Core.Models;
+using Foreman.Core.Profiles;
 using Foreman.Core.Settings;
 using System.Management;
 using System.Collections.Generic;
@@ -16,15 +17,24 @@ public sealed class WmiProcessWatcher : IDisposable
     private readonly ProcessTreeTracker _tree;
     private readonly EventBus _bus;
     private readonly ForemanSettings _settings;
+    private readonly ProfileMatcher? _profileMatcher;
+    private readonly ViolationDetector? _violationDetector;
     private ManagementEventWatcher? _createWatcher;
     private ManagementEventWatcher? _deleteWatcher;
     private bool _started;
 
-    public WmiProcessWatcher(ProcessTreeTracker tree, EventBus bus, ForemanSettings settings)
+    public WmiProcessWatcher(
+        ProcessTreeTracker tree,
+        EventBus bus,
+        ForemanSettings settings,
+        ProfileMatcher? profileMatcher = null,
+        ViolationDetector? violationDetector = null)
     {
         _tree = tree;
         _bus = bus;
         _settings = settings;
+        _profileMatcher = profileMatcher;
+        _violationDetector = violationDetector;
     }
 
     public void Start()
@@ -92,13 +102,16 @@ public sealed class WmiProcessWatcher : IDisposable
             using var proc = (ManagementBaseObject)e.NewEvent["TargetInstance"];
             var record = BuildRecord(proc);
             _tree.OnProcessCreated(record);
+            ApplyProfileInheritance(record);
 
             // heuristic analysis on the thread pool — don't block the WMI callback
             if (!string.IsNullOrWhiteSpace(record.CommandLine))
             {
                 ThreadPool.QueueUserWorkItem(_ =>
                 {
-                    var match = CommandAnalyzer.Instance.Analyze(record.CommandLine, record.Name);
+                    var profile = ResolveProfile(record);
+                    var match = CommandAnalyzer.Instance.Analyze(record.CommandLine, record.Name, profile);
+                    _violationDetector?.CheckCommandLine(record, match);
                     if (match is null) return;
 
                     _bus.Publish(new CommandAlertEvent(
@@ -128,8 +141,9 @@ public sealed class WmiProcessWatcher : IDisposable
             var pid = Convert.ToInt32(proc["ProcessId"]);
             var name = proc["Name"]?.ToString() ?? string.Empty;
             var exitCode = proc["ExitCode"] is uint code ? (int)code : 0;
+            var startTime = ParseDmtfDate(proc["CreationDate"]?.ToString());
 
-            var orphans = _tree.OnProcessDeleted(pid);
+            var orphans = _tree.OnProcessDeleted(pid, startTime, out var deleted);
 
             // publish orphan events for any children that survived
             foreach (var orphan in orphans)
@@ -147,7 +161,7 @@ public sealed class WmiProcessWatcher : IDisposable
             }
 
             // flag nonzero exits from harness-classified processes
-            if (exitCode != 0 && _tree.IsTrackedHarness(pid))
+            if (exitCode != 0 && deleted?.IsHarness == true)
             {
                 _bus.Publish(new NonzeroExitEvent(
                     DateTimeOffset.UtcNow,
@@ -183,25 +197,50 @@ public sealed class WmiProcessWatcher : IDisposable
         };
 
         HarnessClassifier.Classify(record, _settings.DisabledHarnesses, _settings.CustomHarnessExes);
+        ApplyDirectProfile(record);
         return record;
     }
 
     private static DateTimeOffset ParseDmtfDate(string? dmtf)
     {
-        // Format: yyyymmddHHmmss.ffffff+UTC offset  e.g. 20250608143000.000000+000
-        if (string.IsNullOrEmpty(dmtf) || dmtf.Length < 14)
+        if (string.IsNullOrEmpty(dmtf))
             return DateTimeOffset.UtcNow;
 
         try
         {
-            return DateTimeOffset.ParseExact(dmtf[..14], "yyyyMMddHHmmss",
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.AssumeUniversal);
+            var local = ManagementDateTimeConverter.ToDateTime(dmtf);
+            if (local.Kind == DateTimeKind.Unspecified)
+                local = DateTime.SpecifyKind(local, DateTimeKind.Local);
+            return new DateTimeOffset(local);
         }
         catch
         {
             return DateTimeOffset.UtcNow;
         }
+    }
+
+    private void ApplyDirectProfile(ProcessRecord record)
+    {
+        if (_profileMatcher?.Match(record) is { } profile)
+            record.ProfileName = profile.Name;
+    }
+
+    private void ApplyProfileInheritance(ProcessRecord record)
+    {
+        if (record.ProfileName is not null) return;
+        if (_tree.FindProfileAncestor(record.Pid)?.ProfileName is { } profileName)
+            record.ProfileName = profileName;
+    }
+
+    private HarnessProfile? ResolveProfile(ProcessRecord record)
+    {
+        if (record.ProfileName is not null && _profileMatcher?.Get(record.ProfileName) is { } byName)
+            return byName;
+        ApplyDirectProfile(record);
+        ApplyProfileInheritance(record);
+        return record.ProfileName is not null
+            ? _profileMatcher?.Get(record.ProfileName)
+            : null;
     }
 
     private static string TruncateCmdLine(string cmd, int max = 120) =>

@@ -82,7 +82,12 @@ public sealed class HangDetectorTests
         sut.Check(child);   // same hang episode — must NOT produce a second alert
 
         Assert.Single(hits);
+        Assert.Equal(ForemanSeverity.Medium, hits[0].Severity);
+        Assert.Equal(harness.Pid, hits[0].SpawnerPid);
+        Assert.Equal("node.exe", hits[0].SpawnerName);
         Assert.Equal(harness.Pid, hits[0].ParentHarnessPid);
+        Assert.Equal("claude-code", hits[0].ParentHarnessType);
+        Assert.Equal("node.exe", hits[0].ParentHarnessName);
         Assert.Contains("claude-code", hits[0].Message);
     }
 
@@ -139,7 +144,34 @@ public sealed class HangDetectorTests
         sut.Check(rb);
 
         Assert.Single(hits);
+        Assert.Equal(rb.ParentPid, hits[0].SpawnerPid);
         Assert.Null(hits[0].ParentHarnessPid);  // no harness owner
+    }
+
+    [Fact]
+    public void NestedHarnessChild_AttributesDirectSpawnerAndHarnessOwner()
+    {
+        var tree = new ProcessTreeTracker();
+        var harness = Idle(900_801, 900_800, "codex.exe", isHarness: true, harnessType: "codex");
+        var shell = Idle(900_802, harness.Pid, "powershell.exe");
+        var child = Idle(900_803, shell.Pid, "dotnet.exe");
+        tree.OnProcessCreated(harness);
+        tree.OnProcessCreated(shell);
+        tree.OnProcessCreated(child);
+
+        var hits = CaptureHangsFor(child.Pid);
+        var sut = new HangDetector(EventBus.Instance, new ForemanSettings(), tree);
+
+        sut.Check(child);
+
+        Assert.Single(hits);
+        Assert.Equal(shell.Pid, hits[0].SpawnerPid);
+        Assert.Equal("powershell.exe", hits[0].SpawnerName);
+        Assert.Equal(harness.Pid, hits[0].ParentHarnessPid);
+        Assert.Equal("codex", hits[0].ParentHarnessType);
+        Assert.Equal("codex.exe", hits[0].ParentHarnessName);
+        Assert.Contains("powershell.exe", hits[0].Message);
+        Assert.Contains("codex", hits[0].Message);
     }
 
     [Fact]
@@ -157,6 +189,22 @@ public sealed class HangDetectorTests
         var sut  = new HangDetector(EventBus.Instance, new ForemanSettings(), tree);
 
         sut.Check(conhost);
+
+        Assert.Empty(hits);
+    }
+
+    [Fact]
+    public void ForemanAppProcess_IsIgnored_ByHangDetector()
+    {
+        var tree = new ProcessTreeTracker();
+        var foreman = Idle(900_701, 900_700, "Foreman.App.exe");
+        tree.OnProcessCreated(foreman);
+
+        var hits = CaptureHangsFor(foreman.Pid);
+        var settings = new ForemanSettings { MonitorAllProcesses = true };
+        var sut = new HangDetector(EventBus.Instance, settings, tree);
+
+        sut.Check(foreman);
 
         Assert.Empty(hits);
     }

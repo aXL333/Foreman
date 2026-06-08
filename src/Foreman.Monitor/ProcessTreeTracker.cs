@@ -31,17 +31,34 @@ public sealed class ProcessTreeTracker
     /// <summary>
     /// Called when a process exits. Returns all live children that are now orphaned.
     /// </summary>
-    public IReadOnlyList<ProcessRecord> OnProcessDeleted(int pid)
+    public IReadOnlyList<ProcessRecord> OnProcessDeleted(
+        int pid,
+        DateTimeOffset? startTime,
+        out ProcessRecord? deleted)
     {
-        if (!_pidIndex.TryGetValue(pid, out var key)) return [];
+        deleted = null;
 
-        _records.TryRemove(key, out _);
-        _pidIndex.TryRemove(pid, out _);
+        string? key = null;
+        if (startTime is not null)
+        {
+            var stableKey = $"{pid}:{startTime.Value.ToUnixTimeMilliseconds()}";
+            if (_records.ContainsKey(stableKey))
+                key = stableKey;
+        }
+
+        if (key is null && !_pidIndex.TryGetValue(pid, out key)) return [];
+
+        _records.TryRemove(key, out deleted);
+        if (_pidIndex.TryGetValue(pid, out var indexedKey) && indexedKey == key)
+            _pidIndex.TryRemove(pid, out _);
 
         // find children whose parent was this pid and are still alive
-        return _records.Values
+        var orphans = _records.Values
             .Where(r => r.ParentPid == pid && r.State != ProcessState.Terminated)
             .ToList();
+        foreach (var orphan in orphans)
+            orphan.State = ProcessState.Orphaned;
+        return orphans;
     }
 
     public bool IsTrackedHarness(int pid)
@@ -85,6 +102,11 @@ public sealed class ProcessTreeTracker
     /// </summary>
     public ProcessRecord? FindHarnessTypeAncestor(int pid) => WalkAncestors(pid, static r => r.HarnessType is not null);
 
+    /// <summary>
+    /// Nearest ancestor (including the process itself) with a matched permission profile.
+    /// </summary>
+    public ProcessRecord? FindProfileAncestor(int pid) => WalkAncestors(pid, static r => r.ProfileName is not null);
+
     public void UpdateIoCounters(int pid, ulong readOps, ulong writeOps)
     {
         if (!_pidIndex.TryGetValue(pid, out var key)) return;
@@ -114,18 +136,23 @@ public sealed class ProcessTreeTracker
         _records.Values.Where(r =>
             string.Equals(r.HarnessType, harnessType, StringComparison.OrdinalIgnoreCase));
 
+    public IEnumerable<ProcessRecord> GetTreeByHarnessType(string harnessType) =>
+        _records.Values.Where(r =>
+            string.Equals(r.HarnessType, harnessType, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(FindHarnessTypeAncestor(r.Pid)?.HarnessType, harnessType, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>
-    /// Sends SIGKILL to every tracked process whose HarnessType matches.
+    /// Terminates every tracked process in the matching harness tree.
     /// Silently ignores processes that have already exited.
     /// </summary>
     public void KillHarness(string harnessType)
     {
-        foreach (var rec in GetByHarnessType(harnessType).ToList())
+        foreach (var rec in GetTreeByHarnessType(harnessType).ToList())
         {
             try
             {
                 using var proc = Process.GetProcessById(rec.Pid);
-                proc.Kill(entireProcessTree: false);
+                proc.Kill(entireProcessTree: rec.IsHarness);
             }
             catch { /* already exited or access denied */ }
         }

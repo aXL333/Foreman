@@ -1,5 +1,9 @@
 # Foreman
 
+<p align="center">
+  <img src="src/Foreman.App/Resources/foreman.png" alt="Foreman icon" width="96" height="96">
+</p>
+
 A Windows tray watchdog for AI coding agents. It watches the processes your agents spawn, flags shell commands that look dangerous, tracks each agent's behavior over a session, and exposes an MCP bridge so an agent can query its own oversight.
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
@@ -72,7 +76,11 @@ Four moving parts, kept deliberately separate.
 | `GetBehaviorMetrics` | escalation level and counts for every monitored agent |
 | `ResetBehaviorMetrics` | reset one agent's escalation back to Watch (e.g. starting an unrelated task) |
 | `ReportTaskStart` | announce a new task so operators can correlate task boundaries with alerts |
-| `GetMyPermissions` | the permission profile that applies to the caller |
+| `GetMyPermissions` | the permission profile resolved from `harnessId`, `processId`, or `profileName` |
+| `GetIntegrationInstructions` | generated MCP setup instructions for a supported harness |
+| `ValidateHarnessIntegration` | checks whether a harness profile, process tree, and MCP sessions are visible |
+| `ListAuditPreferences` | user-configured LLM auditor preference list |
+| `GetAuditRoute` | selects the preferred non-self auditor harness or API for cross-agent triage |
 
 ## Install
 
@@ -136,8 +144,9 @@ Settings are stored at `%LocalAppData%\Foreman\settings.json` and editable from 
 | `MonitorAllProcesses` | `false` | `false` = harness children only |
 | `CustomHarnessExes` | `[]` | extra executable names to treat as agents |
 | `DisabledHarnesses` | `[]` | agents to detect but not alert on |
+| `LlmTriage` | enabled | auditor preference routing for one harness/API to review another |
 
-Per-session escalation thresholds (medium-alert count, high-alert count, unique-rule count, category count, total-alert count, and the set of emergency-tier rule IDs) live in the same file. Defaults are in [`src/Foreman.Core/Settings/ForemanSettings.cs`](src/Foreman.Core/Settings/ForemanSettings.cs).
+Per-session escalation thresholds (medium-alert count, high-alert count, unique-rule count, category count, total-alert count, and the set of emergency-tier rule IDs) live in the same file. So does the LLM triage preference list: each auditor entry can target specific harness IDs, require a minimum severity, and point either to another running harness or to an API endpoint. Defaults are in [`src/Foreman.Core/Settings/ForemanSettings.cs`](src/Foreman.Core/Settings/ForemanSettings.cs).
 
 ## Project status & roadmap
 

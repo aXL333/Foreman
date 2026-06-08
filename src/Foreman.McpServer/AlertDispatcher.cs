@@ -43,6 +43,11 @@ public sealed class AlertDispatcher : IEventSink
             processName = h.ProcessName,
             uptimeMinutes = h.UptimeMinutes,
             silentMinutes = h.SilentMinutes,
+            spawnerPid = h.SpawnerPid,
+            spawnerName = h.SpawnerName,
+            parentHarnessPid = h.ParentHarnessPid,
+            parentHarnessType = h.ParentHarnessType,
+            parentHarnessName = h.ParentHarnessName,
             message = h.Message,
         },
         OrphanDetectedEvent o => new

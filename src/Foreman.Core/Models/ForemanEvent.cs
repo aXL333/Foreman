@@ -34,8 +34,12 @@ public sealed record HangDetectedEvent(
     string ProcessName,
     int UptimeMinutes,
     int SilentMinutes,
-    int? ParentHarnessPid
-) : ForemanEvent(Timestamp, ForemanSeverity.High, Source, Message);
+    int? SpawnerPid,
+    string? SpawnerName,
+    int? ParentHarnessPid,
+    string? ParentHarnessType,
+    string? ParentHarnessName
+) : ForemanEvent(Timestamp, ForemanSeverity.Medium, Source, Message);
 
 public sealed record OrphanDetectedEvent(
     DateTimeOffset Timestamp,

@@ -25,6 +25,8 @@ public sealed class ProfileMatcher
         return null;
     }
 
+    public HarnessProfile? Get(string name) => _store.Get(name);
+
     private static bool Matches(ProcessRecord record, ProcessMatchConfig cfg)
     {
         var name = record.Name.ToLowerInvariant();

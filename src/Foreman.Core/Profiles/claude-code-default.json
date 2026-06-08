@@ -39,6 +39,8 @@
     "notifyOnHang": true,
     "notifyOnOrphan": true,
     "notifyOnViolation": true,
-    "suppressDuplicatesWindowMinutes": 5
+    "suppressDuplicatesWindowMinutes": 5,
+    "trustedHookPathMarkers": [".claude\\hooks\\", ".claude/hooks/"],
+    "launcherSuppressedRuleIds": ["win-002"]
   }
 }

@@ -5,9 +5,9 @@ namespace Foreman.Core.Tests.Heuristics;
 
 /// <summary>
 /// A harness running its OWN configured hook scripts (under .claude/hooks/) legitimately uses
-/// -ExecutionPolicy Bypass / -NoProfile, so the launcher-hygiene rules (win-001/win-002) must
-/// be suppressed for those command lines — otherwise every hook invocation spams an alert and
-/// escalates the harness. The same patterns must still fire for non-hook commands.
+/// -ExecutionPolicy Bypass / -NoProfile, so the launcher-hygiene rule (win-002) is suppressed
+/// for those command lines — otherwise every hook invocation spams an alert and escalates the
+/// harness. EncodedCommand remains alertable even when a hook path is present.
 /// </summary>
 public sealed class HookSuppressionTests : IClassFixture<PatternLibraryFixture>
 {

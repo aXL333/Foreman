@@ -16,8 +16,8 @@ public interface IEventSink
 /// </summary>
 public sealed class EventBus
 {
-    private readonly ConcurrentBag<IEventSink> _sinks = new();
-    private readonly ConcurrentBag<Action<ForemanEvent>> _handlers = new();
+    private readonly ConcurrentDictionary<IEventSink, byte> _sinks = new();
+    private readonly ConcurrentDictionary<Action<ForemanEvent>, byte> _handlers = new();
     private readonly ConcurrentQueue<ForemanEvent> _history = new();
     private const int MaxHistory = 1000;
 
@@ -25,8 +25,11 @@ public sealed class EventBus
 
     private EventBus() { }
 
-    public void Subscribe(IEventSink sink) => _sinks.Add(sink);
-    public void Subscribe(Action<ForemanEvent> handler) => _handlers.Add(handler);
+    public void Subscribe(IEventSink sink) => _sinks.TryAdd(sink, 0);
+    public void Subscribe(Action<ForemanEvent> handler) => _handlers.TryAdd(handler, 0);
+
+    public void Unsubscribe(IEventSink sink) => _sinks.TryRemove(sink, out _);
+    public void Unsubscribe(Action<ForemanEvent> handler) => _handlers.TryRemove(handler, out _);
 
     /// <summary>Returns a snapshot of all events since startup, oldest first (capped at 1000).</summary>
     public IReadOnlyList<ForemanEvent> GetHistory() => _history.ToArray();
@@ -38,13 +41,13 @@ public sealed class EventBus
         while (_history.Count > MaxHistory)
             _history.TryDequeue(out _);
 
-        foreach (var sink in _sinks)
+        foreach (var sink in _sinks.Keys)
         {
             try { sink.OnEvent(evt); }
             catch { /* never let a bad sink kill the bus */ }
         }
 
-        foreach (var handler in _handlers)
+        foreach (var handler in _handlers.Keys)
         {
             try { handler(evt); }
             catch { }
