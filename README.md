@@ -80,6 +80,8 @@ Four moving parts, kept deliberately separate.
 | Alarm | a critical alert, enough unique rules or categories | notification + MCP push to the connected agent |
 | Emergency | an emergency-tier rule, or too many alerts across the major categories at once | alarm window auto-opens with Kill / Disable actions |
 
+**MCP supply-chain watch.** Foreman reads the MCP servers your agents are configured to use (e.g. Claude Code's `.claude.json`, global and per-project) and raises a medium alert when a new or changed-target server appears — a "who added this MCP server?" check. This is on by default and costs nothing: config-file reads only, no network, no elevation. Optionally (Settings → *Scan MCP tools*, off by default) Foreman can go further and connect to the HTTP/SSE servers, enumerate their tools, and flag tool names or descriptions that read like prompt injection or data exfil — a tool description is fed to the model verbatim, so it is a real injection vector. The opt-in scan is the only feature that makes outbound connections to third-party servers; stdio servers are never launched.
+
 **MCP bridge.** An embedded ASP.NET Core Kestrel host runs an MCP server (ModelContextProtocol SDK) over HTTP+SSE at `http://localhost:54321/mcp`, plus a `/health` endpoint. The tools exposed to an agent:
 
 | Tool | What it does |
@@ -98,6 +100,8 @@ Four moving parts, kept deliberately separate.
 | `ValidateHarnessIntegration` | checks whether a harness profile, process tree, and MCP sessions are visible |
 | `ListAuditPreferences` | user-configured LLM auditor preference list |
 | `GetAuditRoute` | selects the preferred non-self auditor harness or API for cross-agent triage |
+| `ListMcpServers` | the MCP servers Foreman discovered across your harness configs (name, transport, target, scope) |
+| `ListMcpToolFindings` | latest opt-in MCP tool-description injection scan results (off unless enabled in Settings) |
 
 ## Install
 
@@ -161,6 +165,8 @@ Settings are stored at `%LocalAppData%\Foreman\settings.json` and editable from 
 | `MonitorAllProcesses` | `false` | `false` = harness children only |
 | `CustomHarnessExes` | `[]` | extra executable names to treat as agents |
 | `DisabledHarnesses` | `[]` | agents to detect but not alert on |
+| `RunElevated` | `false` | opt-in: launch the elevated ETW sidecar for the per-process Network column |
+| `ScanMcpTools` | `false` | opt-in: connect to HTTP/SSE MCP servers and scan tool descriptions for injection |
 | `LlmTriage` | enabled | auditor preference routing for one harness/API to review another |
 
 Per-session escalation thresholds (medium-alert count, high-alert count, unique-rule count, category count, total-alert count, and the set of emergency-tier rule IDs) live in the same file. So does the LLM triage preference list: each auditor entry can target specific harness IDs, require a minimum severity, and point either to another running harness or to an API endpoint. The built-in audit routes let Claude Code, Codex and OpenCode review each other, and let those agents review T3 Code as a control plane. Defaults are in [`src/Foreman.Core/Settings/ForemanSettings.cs`](src/Foreman.Core/Settings/ForemanSettings.cs).
