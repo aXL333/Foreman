@@ -1,5 +1,9 @@
 using Foreman.Core.Models;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -48,7 +52,10 @@ public partial class ProcessMonitorWindow : Window
         var metrics = _sampler.Sample(filteredRecords.Select(p => p.Pid).ToList());
 
         var filtered = filteredRecords
-            .Select(p => new ProcessMonitorVm(p, metrics.TryGetValue(p.Pid, out var m) ? m : null))
+            .Select(p => new ProcessMonitorVm(
+                p,
+                metrics.TryGetValue(p.Pid, out var m) ? m : null,
+                FileHashCache.GetOrCompute(p.ExecutablePath)))
             .ToList();
 
         ProcessList.ItemsSource = filtered;
@@ -99,6 +106,56 @@ public partial class ProcessMonitorWindow : Window
             Clipboard.SetText(cmd);
     }
 
+    // ── Executable / hash actions (right-click context menu) ──────────────────
+
+    // Right-click should act on the row under the cursor, so select it first.
+    private void ProcessList_RightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var dep = e.OriginalSource as DependencyObject;
+        while (dep is not null and not ListViewItem)
+            dep = VisualTreeHelper.GetParent(dep);
+        if (dep is ListViewItem item)
+            item.IsSelected = true;
+    }
+
+    private void VirusTotalClick(object sender, RoutedEventArgs e)
+    {
+        if (_selected?.HashFull is { Length: > 0 } hash)
+            OpenUrl($"https://www.virustotal.com/gui/file/{hash.ToLowerInvariant()}");
+        else
+            MessageBox.Show(
+                "No SHA-256 yet for this process's executable — it may still be hashing in the background, " +
+                "or the file path is empty/unreadable at this privilege level.",
+                "Foreman — VirusTotal", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void CopyHashClick(object sender, RoutedEventArgs e)
+    {
+        if (_selected?.HashFull is { Length: > 0 } hash) Clipboard.SetText(hash);
+    }
+
+    private void CopyPathClick(object sender, RoutedEventArgs e)
+    {
+        if (_selected?.ExecutablePath is { Length: > 0 } path) Clipboard.SetText(path);
+    }
+
+    private void OpenLocationClick(object sender, RoutedEventArgs e)
+    {
+        if (_selected?.ExecutablePath is { Length: > 0 } path && File.Exists(path))
+            try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true }); }
+            catch { /* explorer not available — nothing to do */ }
+    }
+
+    private static void OpenUrl(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not open the browser.\n\n{ex.Message}", "Foreman",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         _timer.Stop();
@@ -130,7 +187,12 @@ public sealed class ProcessMonitorVm
     public string GpuLabel { get; }
     public string NetLabel { get; } = "n/a";   // per-process net needs Run Elevated (ETW)
 
-    public ProcessMonitorVm(ProcessRecord p, ResourceSampler.Metrics? metrics)
+    // ── Executable identity ──────────────────────────────────────────────────
+    public string  ExecutablePath { get; }
+    public string? HashFull       { get; }   // full SHA-256 (for VirusTotal / copy), null if unknown
+    public string  HashLabel      { get; }   // short form for the column
+
+    public ProcessMonitorVm(ProcessRecord p, ResourceSampler.Metrics? metrics, string? hash)
     {
         Pid             = p.Pid;
         Name            = p.Name;
@@ -138,6 +200,12 @@ public sealed class ProcessMonitorVm
         CommandLine     = Truncate(p.CommandLine, 80);
         ParentPid       = p.ParentPid;
         HarnessType     = p.HarnessType ?? (p.IsHarness ? "harness" : "—");
+
+        ExecutablePath = p.ExecutablePath;
+        HashFull       = string.IsNullOrEmpty(hash) ? null : hash;
+        HashLabel      = HashFull is { } h               ? h[..12].ToLowerInvariant()
+                       : string.IsNullOrWhiteSpace(p.ExecutablePath) ? "—"   // no path to hash
+                       :                                  "…";               // computing in background
 
         // Terminated rows have no live process to sample.
         if (p.State == ProcessState.Terminated || metrics is not { } m)
