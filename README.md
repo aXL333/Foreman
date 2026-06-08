@@ -5,11 +5,11 @@
 <h1 align="center">Foreman</h1>
 
 <p align="center">
-  A Windows tray watchdog for AI coding agents: process-tree monitoring, command-risk alerts, behavior escalation, and an MCP bridge agents can query for their own oversight.
+  A Windows tray watchdog for AI coding agents with process-tree monitoring, command-risk alerts, behavior escalation and an MCP bridge agents can query for their own oversight.
 </p>
 
 <p align="center">
-  <strong>Built to feel calm, useful, and accountable during real agent work.</strong>
+  <strong>Built to feel calm, useful and accountable during real agent work.</strong>
 </p>
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
@@ -35,9 +35,9 @@ Foreman is a watchdog for that class of problem, not a policy enforcer. It runs 
 
 ## Product standards
 
-Foreman is security tooling, but it should not feel hostile or ugly. The target experience is a quiet tray app people want to keep running: clear status at a glance, explainable alerts, fast paths to detail, and enough visual care that contributors can trust the project is maintained deliberately.
+Foreman is security tooling, but it should not feel hostile or ugly. The target experience is a quiet tray app people want to keep running: clear status at a glance, explainable alerts, fast detail views and enough visual care that contributors can trust the project is maintained deliberately.
 
-That standard matters for FOSS too. Design polish, documentation, tests, and installer quality are treated as first-class work alongside detection coverage.
+That standard matters for FOSS too. Design polish, documentation, tests and installer quality are treated as first-class work alongside detection coverage.
 
 ## Supported agents
 
