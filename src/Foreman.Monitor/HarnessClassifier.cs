@@ -27,7 +27,7 @@ public static class HarnessClassifier
         (
             ["t3 code.exe", "t3code.exe", "t3-code.exe"],
             ["pingdotgg/t3code", "t3code/apps/desktop", @"t3code\apps\desktop",
-             "t3 code/resources/app", @"t3 code\resources\app", "t3.codes"],
+             "t3 code/resources/app", @"t3 code\resources\app"],
             [],
             "t3-code"
         ),

@@ -42,6 +42,8 @@ public partial class App : Application
         _monitor.Start();
 
         _mcpHost = new McpServerHost(settings, EventBus.Instance);
+        // Lock the MCP token file to the current user so another principal on the box can't read it.
+        TokenFileProtector.RestrictToCurrentUser(_mcpHost.TokenFilePath);
 
         // wire monitor's live process snapshot into MCP state and tray Harnesses window
         _mcpHost.State.GetProcessSnapshot    = () => _monitor.Tree.GetAll();
@@ -62,7 +64,7 @@ public partial class App : Application
         AlertDetailWindow.GetHarnessAncestorByPid = pid => _monitor.Tree.FindHarnessTypeAncestor(pid);
         AlertDetailWindow.GetProcessSnapshot = () => _monitor.Tree.GetAll();
         AlertDetailWindow.GetLlmTriageSettings = () => settings.LlmTriage;
-        AlertDetailWindow.KillProcessByPid = pid => _monitor.Tree.KillProcess(pid);
+        AlertDetailWindow.KillProcessByPid = (pid, startTime) => _monitor.Tree.KillProcess(pid, startTime);
 
         // wire behavior tracker into tray (metrics window + kill + disable actions)
         _tray.GetBehaviorProfiles   = () => _monitor.Behavior.Profiles;

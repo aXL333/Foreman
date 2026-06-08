@@ -64,7 +64,8 @@ public partial class DashboardWindow : Window, IEventSink
             .Where(static e => e is CommandAlertEvent
                                   or EscalationEvent
                                   or HangDetectedEvent
-                                  or OrphanDetectedEvent)
+                                  or OrphanDetectedEvent
+                                  or MonitoringNoticeEvent)
             .OrderByDescending(e => e.Timestamp)
             .Take(50)
             .ToList();

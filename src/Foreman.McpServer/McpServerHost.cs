@@ -5,6 +5,7 @@ using Foreman.Core.Events;
 using Foreman.Core.Settings;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -20,10 +21,14 @@ public sealed class McpServerHost : IAsyncDisposable
 {
     private readonly ForemanSettings _settings;
     private readonly EventBus _bus;
+    private readonly McpAuthToken _authToken = new();
     private WebApplication? _app;
 
     public ForemanState State { get; } = new();
     public SseSessionManager Sessions { get; } = new();
+
+    /// <summary>Path of the MCP bearer-token file, so the (Windows) app shell can ACL-restrict it.</summary>
+    public string TokenFilePath => _authToken.TokenFilePath;
 
     public McpServerHost(ForemanSettings settings, EventBus bus)
     {
@@ -79,10 +84,55 @@ public sealed class McpServerHost : IAsyncDisposable
         var dispatcher = _app.Services.GetRequiredService<AlertDispatcher>();
         _bus.Subscribe(dispatcher);
 
+        // ── MCP auth gate ────────────────────────────────────────────────────────
+        // localhost is not an authorization boundary on a shared box. Require the bearer
+        // token (and reject cross-origin/browser requests) on /mcp so a random local process
+        // or a drive-by browser POST cannot drive Foreman's tools. /health stays open.
+        _authToken.WriteSetupFile(_settings.McpPort);
+        _app.Use(async (ctx, next) =>
+        {
+            if (ctx.Request.Path.StartsWithSegments("/mcp"))
+            {
+                var origin = ctx.Request.Headers.Origin.ToString();
+                if (!string.IsNullOrEmpty(origin) && !IsLoopbackOrigin(origin))
+                {
+                    await Deny(ctx, StatusCodes.Status403Forbidden, "Cross-origin requests are not allowed.").ConfigureAwait(false);
+                    return;
+                }
+                if (!_authToken.Matches(ExtractToken(ctx.Request)))
+                {
+                    ctx.Response.Headers.WWWAuthenticate = "Bearer";
+                    await Deny(ctx, StatusCodes.Status401Unauthorized,
+                        "A valid Foreman MCP token is required. See mcp-setup.txt in %LocalAppData%\\Foreman.").ConfigureAwait(false);
+                    return;
+                }
+            }
+            await next().ConfigureAwait(false);
+        });
+
         _app.MapMcp("/mcp");
         _app.MapGet("/health", () => new { status = "ok", port = _settings.McpPort, sessions = Sessions.Count });
 
         await _app.StartAsync(ct).ConfigureAwait(false);
+    }
+
+    private static string? ExtractToken(HttpRequest req)
+    {
+        var auth = req.Headers.Authorization.ToString();
+        if (auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return auth["Bearer ".Length..].Trim();
+        var x = req.Headers["X-Foreman-Token"].ToString();
+        return string.IsNullOrEmpty(x) ? null : x;
+    }
+
+    private static bool IsLoopbackOrigin(string origin) =>
+        Uri.TryCreate(origin, UriKind.Absolute, out var u)
+        && (u.IsLoopback || u.Host is "localhost" or "127.0.0.1" or "::1");
+
+    private static async Task Deny(HttpContext ctx, int status, string message)
+    {
+        ctx.Response.StatusCode = status;
+        await ctx.Response.WriteAsJsonAsync(new { error = message }).ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()

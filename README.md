@@ -33,7 +33,7 @@ It can also save real money. Every runaway loop caught early is fewer paid token
 - Tracks per-agent behavior across a session and **escalates** through four levels (Watch → Alert → Alarm → Emergency) as alerts accumulate.
 - Classifies known agents automatically (Claude Code, Codex, and others) from process name and command line; you can register custom executable names.
 - Exposes an **MCP server** an agent can call to check its own status, pre-flight a command, see whether Foreman has raised an alarm about it and announce task boundaries.
-- Routes LLM triage so a user-nominated harness or API can review another agent's actions.
+- Helps you route triage to a second AI: it picks a non-self auditor from your preference list and prepares the audit prompt — you stay in control of sending it.
 - Keeps a searchable, exportable event log and an at-a-glance dashboard, with tray notifications for critical alerts.
 
 ## Product standards
