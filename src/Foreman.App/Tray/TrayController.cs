@@ -226,6 +226,9 @@ public sealed class TrayController : IEventSink, IDisposable
         {
             var w = new DashboardWindow(GetBehaviorProfiles ?? (() => []));
             w.OpenLogRequested = () => OpenLogWindow();
+            w.OpenProcessMonitorRequested = () => OpenProcessMonitorWindow();
+            w.OpenHarnessesRequested = () => OpenHarnessesWindow();
+            w.OpenBehaviorMetricsRequested = () => OpenBehaviorMetricsWindow();
             w.Show();
             _dashboardWindow = w;  // assign only after Show() succeeds
         }

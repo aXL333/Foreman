@@ -1,10 +1,16 @@
-# Foreman
-
 <p align="center">
-  <img src="src/Foreman.App/Resources/foreman.png" alt="Foreman icon" width="96" height="96">
+  <img src="docs/assets/foreman-social-preview.png" alt="Foreman - a tray watchdog for AI coding agents">
 </p>
 
-A Windows tray watchdog for AI coding agents. It watches the processes your agents spawn, flags shell commands that look dangerous, tracks each agent's behavior over a session, and exposes an MCP bridge so an agent can query its own oversight.
+<h1 align="center">Foreman</h1>
+
+<p align="center">
+  A Windows tray watchdog for AI coding agents: process-tree monitoring, command-risk alerts, behavior escalation, and an MCP bridge agents can query for their own oversight.
+</p>
+
+<p align="center">
+  <strong>Built to feel calm, useful, and accountable during real agent work.</strong>
+</p>
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 
@@ -26,6 +32,12 @@ Foreman is a watchdog for that class of problem, not a policy enforcer. It runs 
 - Classifies known agents automatically (Claude Code, Codex, and others) from process name and command line; you can register custom executable names.
 - Exposes an **MCP server** an agent can call to check its own status, pre-flight a command, see whether Foreman has raised an alarm about it, and announce task boundaries.
 - Keeps a searchable, exportable event log and an at-a-glance dashboard, with tray notifications for critical alerts.
+
+## Product standards
+
+Foreman is security tooling, but it should not feel hostile or ugly. The target experience is a quiet tray app people want to keep running: clear status at a glance, explainable alerts, fast paths to detail, and enough visual care that contributors can trust the project is maintained deliberately.
+
+That standard matters for FOSS too. Design polish, documentation, tests, and installer quality are treated as first-class work alongside detection coverage.
 
 ## Supported agents
 

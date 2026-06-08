@@ -2,6 +2,7 @@ using Foreman.Core.Behavior;
 using Foreman.Core.Events;
 using Foreman.Core.Models;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -24,6 +25,9 @@ public partial class DashboardWindow : Window, IEventSink
 
     /// <summary>Wired by TrayController so "Open Full Log" can open the log window.</summary>
     public Action? OpenLogRequested { get; set; }
+    public Action? OpenProcessMonitorRequested { get; set; }
+    public Action? OpenHarnessesRequested { get; set; }
+    public Action? OpenBehaviorMetricsRequested { get; set; }
 
     public DashboardWindow(Func<IEnumerable<BehaviorProfile>> getProfiles)
     {
@@ -70,7 +74,8 @@ public partial class DashboardWindow : Window, IEventSink
             _alerts.Add(DashboardAlertVm.From(evt));
 
         // ── Harness chips ─────────────────────────────────────────────────────
-        var profiles = _getProfiles()
+        var allProfiles = _getProfiles().ToList();
+        var profiles = allProfiles
             .Where(p => p.TotalAlerts > 0)
             .OrderByDescending(p => (int)p.CurrentLevel)
             .ThenByDescending(p => p.TotalAlerts)
@@ -85,6 +90,18 @@ public partial class DashboardWindow : Window, IEventSink
         SummaryLabel.Text = total == 0
             ? "all clear"
             : $"{total} alert{(total == 1 ? "" : "s")} total";
+
+        var active = history
+            .Where(static e => e is not InfoEvent && !e.Acknowledged)
+            .ToList();
+        ActiveAlertCountLabel.Text = active.Count.ToString(CultureInfo.InvariantCulture);
+        HarnessCountLabel.Text = allProfiles.Count.ToString(CultureInfo.InvariantCulture);
+        HighAlertCountLabel.Text = active
+            .Count(e => e.Severity >= ForemanSeverity.High)
+            .ToString(CultureInfo.InvariantCulture);
+        LastEventLabel.Text = relevant.FirstOrDefault() is { } last
+            ? RelativeSummary(last.Timestamp)
+            : "none";
 
         // ── Footer ────────────────────────────────────────────────────────────
         FooterText.Text = relevant.Count == 0
@@ -111,11 +128,29 @@ public partial class DashboardWindow : Window, IEventSink
     private void OpenLogClick(object sender, RoutedEventArgs e) =>
         OpenLogRequested?.Invoke();
 
+    private void OpenProcessMonitorClick(object sender, RoutedEventArgs e) =>
+        OpenProcessMonitorRequested?.Invoke();
+
+    private void OpenHarnessesClick(object sender, RoutedEventArgs e) =>
+        OpenHarnessesRequested?.Invoke();
+
+    private void OpenBehaviorMetricsClick(object sender, RoutedEventArgs e) =>
+        OpenBehaviorMetricsRequested?.Invoke();
+
     protected override void OnClosed(EventArgs e)
     {
         EventBus.Instance.Unsubscribe(this);
         _refreshTimer.Stop();
         base.OnClosed(e);
+    }
+
+    private static string RelativeSummary(DateTimeOffset ts)
+    {
+        var ago = DateTimeOffset.UtcNow - ts;
+        if (ago.TotalSeconds < 30) return "just now";
+        if (ago.TotalMinutes < 60) return $"{Math.Max(1, (int)ago.TotalMinutes)}m ago";
+        if (ago.TotalHours < 24) return $"{(int)ago.TotalHours}h ago";
+        return $"{(int)ago.TotalDays}d ago";
     }
 }
 
