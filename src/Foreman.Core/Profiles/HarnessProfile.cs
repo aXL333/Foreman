@@ -103,4 +103,10 @@ public sealed class AlertConfig
 
     [JsonPropertyName("suppressDuplicatesWindowMinutes")]
     public int SuppressDuplicatesWindowMinutes { get; set; } = 5;
+
+    [JsonPropertyName("trustedHookPathMarkers")]
+    public string[] TrustedHookPathMarkers { get; set; } = [];
+
+    [JsonPropertyName("launcherSuppressedRuleIds")]
+    public string[] LauncherSuppressedRuleIds { get; set; } = [];
 }

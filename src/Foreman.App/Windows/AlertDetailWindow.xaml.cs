@@ -223,7 +223,7 @@ public sealed class AlertDetailVm
                 EventTypeLabel = "Process Hang Detected";
                 WhyDangerous =
                     $"\"{hang.ProcessName}\" (pid {hang.ProcessId}) has been running for {hang.UptimeMinutes} minutes " +
-                    $"with no I/O activity for {hang.SilentMinutes} minutes.{ResolveHarnessOwner(hang.ParentHarnessPid)}\n\n" +
+                    $"with no I/O activity for {hang.SilentMinutes} minutes.{ResolveHarnessOwner(hang)}\n\n" +
                     $"This means the process is stuck — waiting for input that will never come, " +
                     $"caught in an infinite loop, or blocked on a locked resource. Hung harness " +
                     $"children can accumulate silently and consume memory or file handles.";
@@ -357,13 +357,45 @@ public sealed class AlertDetailVm
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     /// <summary>Names the harness a hung/orphaned child belongs to, for the alert text.</summary>
-    private static string ResolveHarnessOwner(int? harnessPid)
+    private static string ResolveHarnessOwner(HangDetectedEvent hang)
     {
-        if (harnessPid is not int hp) return "";
-        var rec = AlertDetailWindow.GetProcessByPid?.Invoke(hp);
-        return rec?.HarnessType is { } ht
-            ? $" Spawned by the {ht} harness ({rec.Name}, pid {hp})."
-            : $" Spawned by harness process pid {hp}.";
+        var parts = new List<string>();
+
+        if (hang.SpawnerPid is int spawnerPid)
+        {
+            var spawner = AlertDetailWindow.GetProcessByPid?.Invoke(spawnerPid);
+            var spawnerName = spawner?.Name ?? hang.SpawnerName;
+            if (hang.ParentHarnessPid == spawnerPid && !string.IsNullOrWhiteSpace(hang.ParentHarnessType))
+            {
+                parts.Add(string.IsNullOrWhiteSpace(spawnerName)
+                    ? $"Spawned by the {hang.ParentHarnessType} harness (pid {spawnerPid})."
+                    : $"Spawned by the {hang.ParentHarnessType} harness ({spawnerName}, pid {spawnerPid}).");
+            }
+            else
+            {
+                parts.Add(string.IsNullOrWhiteSpace(spawnerName)
+                    ? $"Spawned by parent process pid {spawnerPid}."
+                    : $"Spawned by {spawnerName} (pid {spawnerPid}).");
+            }
+        }
+
+        if (hang.ParentHarnessPid is int hp && hp != hang.SpawnerPid)
+        {
+            var rec = AlertDetailWindow.GetProcessByPid?.Invoke(hp);
+            var harnessType = rec?.HarnessType ?? hang.ParentHarnessType;
+            var processName = rec?.Name ?? hang.ParentHarnessName;
+
+            if (!string.IsNullOrWhiteSpace(harnessType) && !string.IsNullOrWhiteSpace(processName))
+                parts.Add($"Owned by the {harnessType} harness ({processName}, pid {hp}).");
+            else if (!string.IsNullOrWhiteSpace(harnessType))
+                parts.Add($"Owned by the {harnessType} harness (pid {hp}).");
+            else if (!string.IsNullOrWhiteSpace(processName))
+                parts.Add($"Owned by harness process {processName} (pid {hp}).");
+            else
+                parts.Add($"Owned by harness process pid {hp}.");
+        }
+
+        return parts.Count == 0 ? "" : " " + string.Join(" ", parts);
     }
 
     private static (Brush bg, Brush fg) EscalationColors(EscalationLevel level) => level switch

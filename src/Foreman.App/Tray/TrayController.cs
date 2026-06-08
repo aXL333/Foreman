@@ -108,20 +108,13 @@ public sealed class TrayController : IEventSink, IDisposable
 
     void IEventSink.OnEvent(ForemanEvent evt)
     {
-        if (evt.Acknowledged) return;
-        if (evt is InfoEvent) return;   // info events don't count as active alerts
-
-        _activeAlerts++;
-        var newStatus = evt.Severity switch
-        {
-            ForemanSeverity.Critical or ForemanSeverity.High => TrayStatus.Red,
-            ForemanSeverity.Medium or ForemanSeverity.Low    => _status == TrayStatus.Red ? TrayStatus.Red : TrayStatus.Amber,
-            _                                                 => _status,
-        };
-
         Application.Current.Dispatcher.BeginInvoke(() =>
         {
-            SetStatus(newStatus);
+            RefreshAlertState();
+
+            if (evt is InfoEvent || evt.Acknowledged)
+                return;
+
             ShowBalloonIfNeeded(evt);
 
             // escalation-specific handling
@@ -204,6 +197,27 @@ public sealed class TrayController : IEventSink, IDisposable
             : "";
         _tray.ToolTipText = $"Foreman — {(_activeAlerts > 0 ? $"{_activeAlerts} alert(s){escalationStr}" : "All clear")}";
         _tray.ContextMenu = BuildMenu();
+    }
+
+    private void RefreshAlertState()
+    {
+        var active = EventBus.Instance.GetHistory()
+            .Where(static e => e is not InfoEvent && !e.Acknowledged)
+            .ToList();
+
+        _activeAlerts = active.Count;
+        _highestEscalation = active
+            .OfType<EscalationEvent>()
+            .Select(e => e.NewLevel)
+            .DefaultIfEmpty(EscalationLevel.Watch)
+            .Max();
+
+        var status = active.Any(e => e.Severity >= ForemanSeverity.High)
+            ? TrayStatus.Red
+            : active.Any(e => e.Severity >= ForemanSeverity.Low)
+                ? TrayStatus.Amber
+                : TrayStatus.Green;
+        SetStatus(status);
     }
 
     private void OpenDashboardWindow()

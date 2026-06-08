@@ -85,7 +85,14 @@ public sealed class IoPoller : IDisposable
     public void Dispose()
     {
         _cts.Cancel();
-        _task?.GetAwaiter().GetResult();
+        try
+        {
+            _task?.GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException)
+        {
+            // Normal shutdown path: PeriodicTimer observes the cancelled token.
+        }
         _cts.Dispose();
     }
 }

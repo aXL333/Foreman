@@ -1,5 +1,6 @@
 using Foreman.Core.Behavior;
 using Foreman.Core.Events;
+using Foreman.Core.Profiles;
 using Foreman.Core.Settings;
 using Foreman.Monitor.Wmi;
 
@@ -13,16 +14,25 @@ public sealed class MonitorService : IDisposable
 {
     private readonly WmiProcessWatcher _watcher;
     private readonly IoPoller _poller;
+    private readonly ProfileStore _profileStore;
     private bool _started;
 
     public ProcessTreeTracker Tree     { get; }
     public BehaviorTracker    Behavior { get; }
+    public ProfileMatcher     Profiles { get; }
 
     public MonitorService(ForemanSettings settings, EventBus bus)
     {
         Tree = new ProcessTreeTracker();
+        _profileStore = new ProfileStore(settings.ProfilesDirectory);
+        _profileStore.Initialize();
+        Profiles = new ProfileMatcher(_profileStore);
+        var violationDetector = new ViolationDetector(
+            Profiles,
+            bus,
+            pid => Tree.FindProfileAncestor(pid));
         var hangDetector = new HangDetector(bus, settings, Tree);
-        _watcher  = new WmiProcessWatcher(Tree, bus, settings);
+        _watcher  = new WmiProcessWatcher(Tree, bus, settings, Profiles, violationDetector);
         _poller   = new IoPoller(Tree, hangDetector, settings);
         Behavior  = new BehaviorTracker(
             settings, bus,
@@ -42,5 +52,6 @@ public sealed class MonitorService : IDisposable
     {
         _poller.Dispose();
         _watcher.Dispose();
+        _profileStore.Dispose();
     }
 }

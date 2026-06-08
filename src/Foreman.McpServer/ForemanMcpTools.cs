@@ -35,11 +35,16 @@ public static class ForemanMcpTools
 
     [McpServerTool, Description("Lists all AI harness processes Foreman is monitoring.")]
     public static object ListMonitoredProcesses(
-        [Description("Include child processes of harnesses")] bool includeChildren = true)
+        [Description("Include child processes of harnesses")] bool includeChildren = true,
+        [Description("Optional harness ID to scope results, e.g. 'claude-code' or 'codex'")] string? harnessId = null,
+        [Description("Optional caller process ID; used to infer the caller's harness tree")] int? processId = null)
     {
         var state = _state ?? new ForemanState();
-        var procs = state.GetProcesses(includeChildren);
-        return new { processes = procs };
+        var resolvedHarness = state.ResolveHarnessId(harnessId, processId);
+        var procs = resolvedHarness is not null
+            ? state.GetProcessesForHarness(resolvedHarness, includeChildren)
+            : state.GetProcesses(includeChildren);
+        return new { harnessId = resolvedHarness, processes = procs };
     }
 
     [McpServerTool, Description("Returns detailed information about a specific process by PID.")]
@@ -91,39 +96,83 @@ public static class ForemanMcpTools
     [McpServerTool, Description("Pre-flight check a command line. Foreman heuristically evaluates it and returns allow/block/escalate.")]
     public static object ReportSuspiciousCommand(
         [Description("The command line to evaluate")] string commandLine,
-        [Description("What the harness is trying to accomplish")] string context = "")
+        [Description("What the harness is trying to accomplish")] string context = "",
+        [Description("Optional harness ID, e.g. 'claude-code' or 'codex'")] string? harnessId = null,
+        [Description("Optional caller process ID for live profile attribution")] int? processId = null,
+        [Description("Optional explicit profile name, e.g. 'codex-default'")] string? profileName = null)
     {
-        var match = Core.Heuristics.CommandAnalyzer.Instance.Analyze(commandLine);
+        var state = _state ?? new ForemanState();
+        var profile = state.ResolveProfile(profileName, harnessId, processId);
+        var resolvedHarness = state.ResolveHarnessId(harnessId, processId);
+        var match = Core.Heuristics.CommandAnalyzer.Instance.Analyze(commandLine, profile: profile);
         if (match is null)
-            return new { decision = "allow", reason = "No heuristic rules matched", matchedRule = (string?)null };
+            return new
+            {
+                decision = "allow",
+                reason = "No heuristic rules matched",
+                matchedRule = (string?)null,
+                harnessId = resolvedHarness,
+                profileName = profile?.Name,
+            };
 
-        var decision = match.Severity switch
+        var profileBlocked =
+            profile is not null &&
+            !string.Equals(profile.Commands.EnforceMode, "monitor", StringComparison.OrdinalIgnoreCase) &&
+            profile.Commands.BlockedPatterns.Contains(match.RuleId, StringComparer.OrdinalIgnoreCase);
+
+        var decision = profileBlocked && string.Equals(profile!.Commands.EnforceMode, "block", StringComparison.OrdinalIgnoreCase)
+            ? "block"
+            : profileBlocked
+                ? "escalate"
+                : match.Severity switch
         {
             ForemanSeverity.Critical => "block",
             ForemanSeverity.High     => "escalate",
             _                        => "allow_once",
         };
 
-        // log the check itself as an event
-        _state?.AddEvent(new CommandAlertEvent(
+        var source = processId is int pid && pid > 0
+            ? $"MCP.ReportSuspiciousCommand (pid {pid})"
+            : "MCP.ReportSuspiciousCommand";
+
+        // Log the check through the normal event bus so tray state, behavior metrics,
+        // MCP state, and connected clients all see the same alert stream.
+        EventBus.Instance.Publish(new CommandAlertEvent(
             DateTimeOffset.UtcNow,
             match.Severity,
-            "MCP.ReportSuspiciousCommand",
+            source,
             $"Harness pre-checked command [{match.RuleId}]: {commandLine[..Math.Min(80, commandLine.Length)]}",
             commandLine,
             match.RuleId,
             match.RuleName,
             match.Description,
             match.Guidance,
-            0
+            processId ?? 0
         ));
+
+        if (profileBlocked)
+        {
+            EventBus.Instance.Publish(new PermissionViolationEvent(
+                DateTimeOffset.UtcNow,
+                "MCP.ReportSuspiciousCommand",
+                $"[{profile!.Name}] CommandBlocked: [{match.RuleId}] {match.RuleName}",
+                processId ?? 0,
+                profile.Name,
+                "CommandBlocked",
+                $"Blocked rule [{match.RuleId}] {match.RuleName}: {match.Description}"));
+        }
 
         return new
         {
             decision,
-            reason = match.RuleName,
+            reason = profileBlocked
+                ? $"Profile '{profile!.Name}' blocks [{match.RuleId}] {match.RuleName}"
+                : match.RuleName,
             matchedRule = match.RuleId,
             severity = match.Severity.ToString(),
+            harnessId = resolvedHarness,
+            profileName = profile?.Name,
+            profileBlocked,
         };
     }
 
@@ -205,14 +254,195 @@ public static class ForemanMcpTools
     }
 
     [McpServerTool, Description("Returns the permission profile that applies to the calling harness.")]
-    public static object GetMyPermissions()
+    public static object GetMyPermissions(
+        [Description("Optional harness ID, e.g. 'claude-code' or 'codex'")] string? harnessId = null,
+        [Description("Optional caller process ID for live profile attribution")] int? processId = null,
+        [Description("Optional explicit profile name, e.g. 'codex-default'")] string? profileName = null)
     {
-        // In a full implementation this would identify the caller's process via connection metadata.
-        // For now, return the claude-code-default profile summary.
+        var state = _state ?? new ForemanState();
+        var resolvedHarness = state.ResolveHarnessId(harnessId, processId);
+        var profile = state.ResolveProfile(profileName, resolvedHarness, processId);
+        if (profile is null)
+        {
+            return new
+            {
+                harnessId = resolvedHarness,
+                profileName = (string?)null,
+                error = "No matching profile. Pass harnessId, processId, or profileName.",
+            };
+        }
+
         return new
         {
-            profileName = "claude-code-default",
-            note = "Full per-caller identification requires MCP session metadata — coming in Phase 5",
+            harnessId = resolvedHarness,
+            profileName = profile.Name,
+            description = profile.Description,
+            commands = new
+            {
+                enforceMode = profile.Commands.EnforceMode,
+                blockedPatterns = profile.Commands.BlockedPatterns,
+            },
+            fileSystem = new
+            {
+                enforceMode = profile.FileSystem.EnforceMode,
+                deniedPaths = profile.FileSystem.DeniedPaths,
+                allowedWritePaths = profile.FileSystem.AllowedWritePaths,
+            },
+            launcherPolicy = new
+            {
+                trustedHookPathMarkers = profile.Alerts.TrustedHookPathMarkers,
+                launcherSuppressedRuleIds = profile.Alerts.LauncherSuppressedRuleIds,
+            },
         };
     }
+
+    [McpServerTool, Description("Returns setup instructions for connecting a supported harness to Foreman's MCP server.")]
+    public static object GetIntegrationInstructions(
+        [Description("Harness ID, e.g. 'claude-code' or 'codex'")] string harnessId)
+    {
+        var state = _state ?? new ForemanState();
+        var integration = HarnessIntegrationRegistry.Get(harnessId);
+        if (integration is null)
+            return new { error = $"No integration metadata for harness '{harnessId}'." };
+
+        var port = state.McpPort;
+        return new
+        {
+            harnessId = integration.HarnessId,
+            displayName = integration.DisplayName,
+            defaultProfileName = integration.DefaultProfileName,
+            setupHint = integration.SetupHint.Replace("{port}", port.ToString(), StringComparison.Ordinal),
+            mcpConfigSnippet = integration.McpConfigSnippet.Replace("{port}", port.ToString(), StringComparison.Ordinal),
+            note = "Pass harnessId or processId to Foreman MCP tools so permissions and process listings can be scoped to this harness.",
+        };
+    }
+
+    [McpServerTool, Description("Checks whether Foreman can see a harness, its profile, and any MCP sessions.")]
+    public static object ValidateHarnessIntegration(
+        [Description("Harness ID, e.g. 'claude-code' or 'codex'")] string harnessId)
+    {
+        var state = _state ?? new ForemanState();
+        var integration = HarnessIntegrationRegistry.Get(harnessId);
+        var profileName = integration?.DefaultProfileName;
+        var profile = profileName is not null ? state.GetProfileByName?.Invoke(profileName) : null;
+        var processes = state.GetProcessesForHarness(harnessId, includeChildren: true).ToArray();
+
+        return new
+        {
+            harnessId,
+            knownHarness = HarnessIntegrationRegistry.GetKnownHarness(harnessId) is not null,
+            integrationMetadata = integration is not null,
+            defaultProfileName = profileName,
+            profileLoaded = profile is not null,
+            runningProcessCount = processes.Length,
+            runningHarnessCount = processes.Count(p => string.Equals(p.HarnessType, harnessId, StringComparison.OrdinalIgnoreCase)),
+            mcpSessions = state.McpSessionCount,
+            status = integration is not null && profile is not null
+                ? "configured"
+                : "incomplete",
+        };
+    }
+
+    [McpServerTool, Description("Lists configured LLM auditor preferences for cross-harness triage.")]
+    public static object ListAuditPreferences()
+    {
+        var state = _state ?? new ForemanState();
+        var settings = state.LlmTriage;
+        return new
+        {
+            enabled = settings.Enabled,
+            preventSelfAudit = settings.PreventSelfAudit,
+            maxEventsPerReview = settings.MaxEventsPerReview,
+            preferences = settings.AuditorPreferences
+                .OrderByDescending(p => p.Priority)
+                .Select(p => new
+                {
+                    p.Enabled,
+                    p.AuditorId,
+                    p.AuditorType,
+                    p.DisplayName,
+                    p.TargetHarnessIds,
+                    p.MinimumSeverities,
+                    p.Priority,
+                    p.ApiEndpoint,
+                    p.Model,
+                })
+                .ToArray(),
+        };
+    }
+
+    [McpServerTool, Description(
+        "Selects the preferred auditor harness/API for reviewing another harness's actions. " +
+        "Use this before asking one AI to audit another.")]
+    public static object GetAuditRoute(
+        [Description("Harness being audited, e.g. 'claude-code' or 'codex'")] string targetHarnessId,
+        [Description("Severity to route, e.g. Medium, High, Critical")] string severity = "High",
+        [Description("Only return currently available auditors")] bool requireAvailable = false)
+    {
+        var state = _state ?? new ForemanState();
+        var settings = state.LlmTriage;
+        var severityRank = SeverityRank(severity);
+
+        var candidates = settings.AuditorPreferences
+            .Where(p => p.Enabled)
+            .Where(p => TargetMatches(p.TargetHarnessIds, targetHarnessId))
+            .Where(p => !settings.PreventSelfAudit ||
+                        !string.Equals(p.AuditorId, targetHarnessId, StringComparison.OrdinalIgnoreCase))
+            .Where(p => HandlesSeverity(p.MinimumSeverities, severityRank))
+            .Select(p =>
+            {
+                var runningHarnessCount = string.Equals(p.AuditorType, "harness", StringComparison.OrdinalIgnoreCase)
+                    ? state.GetProcessesForHarness(p.AuditorId, includeChildren: false).Count()
+                    : 0;
+                var available = string.Equals(p.AuditorType, "api", StringComparison.OrdinalIgnoreCase)
+                    ? !string.IsNullOrWhiteSpace(p.ApiEndpoint)
+                    : runningHarnessCount > 0;
+
+                return new
+                {
+                    p.AuditorId,
+                    p.AuditorType,
+                    displayName = string.IsNullOrWhiteSpace(p.DisplayName) ? p.AuditorId : p.DisplayName,
+                    p.Priority,
+                    available,
+                    runningHarnessCount,
+                    p.ApiEndpoint,
+                    p.Model,
+                };
+            })
+            .Where(c => !requireAvailable || c.available)
+            .OrderByDescending(c => c.available)
+            .ThenByDescending(c => c.Priority)
+            .ToArray();
+
+        return new
+        {
+            enabled = settings.Enabled,
+            targetHarnessId,
+            severity,
+            selected = settings.Enabled ? candidates.FirstOrDefault() : null,
+            candidates = settings.Enabled ? candidates : [],
+            reason = !settings.Enabled
+                ? "LLM triage routing is disabled in settings."
+                : candidates.Length == 0
+                    ? "No auditor preference matched this target/severity."
+                    : "Auditor selected from user preference list.",
+        };
+    }
+
+    private static bool TargetMatches(string[] targets, string targetHarnessId) =>
+        targets.Length == 0 ||
+        targets.Any(t => t == "*" || string.Equals(t, targetHarnessId, StringComparison.OrdinalIgnoreCase));
+
+    private static bool HandlesSeverity(string[] minimumSeverities, int severityRank)
+    {
+        if (minimumSeverities.Length == 0) return true;
+        return minimumSeverities
+            .Select(SeverityRank)
+            .Where(r => r >= 0)
+            .Any(min => severityRank >= min);
+    }
+
+    private static int SeverityRank(string severity) =>
+        Enum.TryParse<ForemanSeverity>(severity, true, out var parsed) ? (int)parsed : -1;
 }

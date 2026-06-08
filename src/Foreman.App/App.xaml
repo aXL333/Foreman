@@ -5,17 +5,21 @@
     <Application.Resources>
         <ResourceDictionary>
             <!-- Dark base palette -->
-            <Color x:Key="BackgroundColor">#FF0D0F12</Color>
-            <Color x:Key="SurfaceColor">#FF13151A</Color>
-            <Color x:Key="AccentColor">#FFE8B23C</Color>
-            <Color x:Key="TextPrimaryColor">#FFE8EAF0</Color>
-            <Color x:Key="TextMutedColor">#FF7A8090</Color>
+            <Color x:Key="BackgroundColor">#FF090A0D</Color>
+            <Color x:Key="SurfaceColor">#FF111319</Color>
+            <Color x:Key="AccentColor">#FFF0B84A</Color>
+            <Color x:Key="TextPrimaryColor">#FFF0F2F6</Color>
+            <Color x:Key="TextMutedColor">#FF8B93A4</Color>
+            <Color x:Key="BorderColor">#FF242832</Color>
+            <Color x:Key="SurfaceRaisedColor">#FF181B23</Color>
 
             <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
             <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}" />
             <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
             <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}" />
             <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMutedColor}" />
+            <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+            <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="{StaticResource SurfaceRaisedColor}" />
 
             <!-- Severity brushes -->
             <SolidColorBrush x:Key="SeverityInfo"     Color="#FF4A90D9" />

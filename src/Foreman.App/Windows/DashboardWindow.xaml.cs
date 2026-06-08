@@ -113,6 +113,7 @@ public partial class DashboardWindow : Window, IEventSink
 
     protected override void OnClosed(EventArgs e)
     {
+        EventBus.Instance.Unsubscribe(this);
         _refreshTimer.Stop();
         base.OnClosed(e);
     }
@@ -245,8 +246,8 @@ public sealed class DashboardAlertVm
 
         HangDetectedEvent hang =>
             (
-                $"{hang.ProcessName}  (pid {hang.ProcessId})  —  no I/O for {hang.SilentMinutes}min",
-                $"running {hang.UptimeMinutes}min total"
+                $"{hang.ProcessName}  (pid {hang.ProcessId})  -  no I/O for {hang.SilentMinutes}min",
+                $"{HangOwnerLine(hang)}  -  running {hang.UptimeMinutes}min total"
             ),
 
         OrphanDetectedEvent orphan =>
@@ -273,6 +274,40 @@ public sealed class DashboardAlertVm
         if (esc.CategoryList.Length > 0)
             parts.Add(string.Join(", ", esc.CategoryList).ToUpperInvariant());
         return string.Join("  ·  ", parts);
+    }
+
+    private static string HangOwnerLine(HangDetectedEvent hang)
+    {
+        var parts = new List<string>();
+
+        if (hang.SpawnerPid is int spawnerPid)
+        {
+            if (hang.ParentHarnessPid == spawnerPid && !string.IsNullOrWhiteSpace(hang.ParentHarnessType))
+            {
+                parts.Add(string.IsNullOrWhiteSpace(hang.SpawnerName)
+                    ? $"spawned by {hang.ParentHarnessType} pid {spawnerPid}"
+                    : $"spawned by {hang.ParentHarnessType} ({hang.SpawnerName}, pid {spawnerPid})");
+            }
+            else
+            {
+                parts.Add(string.IsNullOrWhiteSpace(hang.SpawnerName)
+                    ? $"spawned by pid {spawnerPid}"
+                    : $"spawned by {hang.SpawnerName} (pid {spawnerPid})");
+            }
+        }
+
+        if (hang.ParentHarnessPid is int ownerPid && ownerPid != hang.SpawnerPid)
+        {
+            var type = string.IsNullOrWhiteSpace(hang.ParentHarnessType)
+                ? "harness"
+                : hang.ParentHarnessType;
+            var owner = string.IsNullOrWhiteSpace(hang.ParentHarnessName)
+                ? $"{type} pid {ownerPid}"
+                : $"{type} ({hang.ParentHarnessName}, pid {ownerPid})";
+            parts.Add($"owned by {owner}");
+        }
+
+        return parts.Count == 0 ? "owner unknown" : string.Join(" - ", parts);
     }
 
     private static string ProcessName(string source)

@@ -6,10 +6,11 @@ namespace Foreman.Core.Profiles;
 /// Loads and watches harness profiles from %LocalAppData%\Foreman\profiles\.
 /// Also ships a built-in default profile as a fallback.
 /// </summary>
-public sealed class ProfileStore
+public sealed class ProfileStore : IDisposable
 {
     private readonly string _profilesDirectory;
     private readonly Dictionary<string, HarnessProfile> _profiles = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _gate = new();
     private FileSystemWatcher? _watcher;
 
     private static readonly JsonSerializerOptions _jsonOpts = new()
@@ -31,22 +32,25 @@ public sealed class ProfileStore
     }
 
     public HarnessProfile? Get(string name) =>
-        _profiles.TryGetValue(name, out var p) ? p : null;
+        WithLock(() => _profiles.TryGetValue(name, out var p) ? p : null);
 
-    public IReadOnlyCollection<HarnessProfile> All => _profiles.Values;
+    public IReadOnlyCollection<HarnessProfile> All => WithLock(() => _profiles.Values.ToArray());
 
     private void LoadAll()
     {
-        _profiles.Clear();
-
-        // embedded built-in profiles
-        LoadBuiltIn("claude-code-default");
-        LoadBuiltIn("codex-default");
-
-        // user profiles from disk (override built-ins by name)
-        foreach (var file in Directory.GetFiles(_profilesDirectory, "*.json"))
+        lock (_gate)
         {
-            TryLoadFile(file);
+            _profiles.Clear();
+
+            // embedded built-in profiles
+            LoadBuiltIn("claude-code-default");
+            LoadBuiltIn("codex-default");
+
+            // user profiles from disk (override built-ins by name)
+            foreach (var file in Directory.GetFiles(_profilesDirectory, "*.json"))
+            {
+                TryLoadFile(file);
+            }
         }
     }
 
@@ -86,5 +90,15 @@ public sealed class ProfileStore
         _watcher.Changed += (_, _) => LoadAll();
         _watcher.Created += (_, _) => LoadAll();
         _watcher.Deleted += (_, _) => LoadAll();
+    }
+
+    private T WithLock<T>(Func<T> action)
+    {
+        lock (_gate) return action();
+    }
+
+    public void Dispose()
+    {
+        _watcher?.Dispose();
     }
 }

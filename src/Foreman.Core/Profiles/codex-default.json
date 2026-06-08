@@ -37,6 +37,8 @@
     "notifyOnHang": true,
     "notifyOnOrphan": true,
     "notifyOnViolation": true,
-    "suppressDuplicatesWindowMinutes": 5
+    "suppressDuplicatesWindowMinutes": 5,
+    "trustedHookPathMarkers": [],
+    "launcherSuppressedRuleIds": []
   }
 }

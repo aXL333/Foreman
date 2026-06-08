@@ -213,7 +213,7 @@ public partial class LogWindow : Window, IEventSink
 
     protected override void OnClosed(EventArgs e)
     {
-        // keep subscribed — window may be re-opened; sinking while closed is harmless
+        EventBus.Instance.Unsubscribe(this);
         base.OnClosed(e);
     }
 }

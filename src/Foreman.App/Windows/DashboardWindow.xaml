@@ -2,8 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Foreman"
-        Width="880" Height="520"
-        MinWidth="640" MinHeight="340"
+        Icon="/Resources/foreman.ico"
+        Width="960" Height="600"
+        MinWidth="720" MinHeight="420"
         Background="{StaticResource BackgroundBrush}"
         Foreground="{StaticResource TextPrimaryBrush}"
         FontFamily="Segoe UI, Arial"
@@ -29,23 +30,37 @@
 
         <!-- ── Header ─────────────────────────────────────────────────────────── -->
         <Border Grid.Row="0"
-                Background="#FF0D0F16"
+                Background="#FF0B0D12"
                 BorderBrush="#FF1E2030" BorderThickness="0,0,0,1"
-                Padding="16,10">
+                Padding="16,12">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />    <!-- FOREMAN title -->
-                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="Auto" />    <!-- FOREMAN brand -->
+                    <ColumnDefinition Width="18" />
                     <ColumnDefinition Width="*" />       <!-- harness chips -->
                     <ColumnDefinition Width="Auto" />    <!-- summary text -->
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0"
-                           Text="FOREMAN"
-                           FontSize="13" FontWeight="Bold"
-                           FontFamily="Segoe UI, Arial"
-                           Foreground="{StaticResource AccentBrush}"
-                           VerticalAlignment="Center" />
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="34" Height="34" CornerRadius="7"
+                            BorderBrush="#806A5520" BorderThickness="1"
+                            Background="#FF10131A"
+                            Margin="0,0,10,0">
+                        <Image Source="/Resources/foreman.png"
+                               Width="30" Height="30"
+                               RenderOptions.BitmapScalingMode="HighQuality" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="FOREMAN"
+                                   FontSize="15" FontWeight="Bold"
+                                   FontFamily="Segoe UI, Arial"
+                                   Foreground="{StaticResource AccentBrush}" />
+                        <TextBlock Text="harness watch"
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Margin="0,1,0,0" />
+                    </StackPanel>
+                </StackPanel>
 
                 <!-- One chip per harness that has alerts.  Empty = "all clear" hint. -->
                 <ItemsControl Grid.Column="2" x:Name="HarnessPanel"
@@ -88,15 +103,23 @@
 
         <!-- ── Empty state (shown when no security alerts exist) ─────────────── -->
         <Grid Grid.Row="1" x:Name="EmptyPanel" Visibility="Collapsed">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Opacity="0.5">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Opacity="0.78">
+                <Border Width="82" Height="82" CornerRadius="14"
+                        Background="#FF10131A"
+                        BorderBrush="#664C3A16" BorderThickness="1"
+                        Margin="0,0,0,16">
+                    <Image Source="/Resources/foreman.png"
+                           Width="76" Height="76"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+                </Border>
                 <TextBlock Text="No security alerts this session"
-                           FontSize="14" FontFamily="Segoe UI, Arial"
+                           FontSize="16" FontWeight="SemiBold" FontFamily="Segoe UI, Arial"
                            Foreground="{StaticResource TextPrimaryBrush}"
                            HorizontalAlignment="Center" />
                 <TextBlock Text="Foreman is watching"
-                           FontSize="11" FontFamily="Segoe UI, Arial"
+                           FontSize="12" FontFamily="Segoe UI, Arial"
                            Foreground="{StaticResource TextMutedBrush}"
-                           HorizontalAlignment="Center" Margin="0,5,0,0" />
+                           HorizontalAlignment="Center" Margin="0,6,0,0" />
             </StackPanel>
         </Grid>
 

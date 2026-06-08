@@ -1,4 +1,5 @@
 using Foreman.Core.Events;
+using Foreman.Core.Heuristics;
 using Foreman.Core.Models;
 
 namespace Foreman.Core.Profiles;
@@ -11,32 +12,34 @@ public sealed class ViolationDetector
 {
     private readonly ProfileMatcher _matcher;
     private readonly EventBus _bus;
+    private readonly Func<int, ProcessRecord?>? _findProfileAncestor;
 
-    public ViolationDetector(ProfileMatcher matcher, EventBus bus)
+    public ViolationDetector(
+        ProfileMatcher matcher,
+        EventBus bus,
+        Func<int, ProcessRecord?>? findProfileAncestor = null)
     {
         _matcher = matcher;
         _bus = bus;
+        _findProfileAncestor = findProfileAncestor;
     }
 
     /// <summary>
     /// Called by the WMI watcher after a command is analysed.
     /// If the command matches a blocked pattern in the harness profile, emit a violation.
     /// </summary>
-    public void CheckCommandLine(ProcessRecord record, string commandLine)
+    public void CheckCommandLine(ProcessRecord record, RuleMatch? match)
     {
-        var profile = _matcher.Match(record);
-        if (profile is null) return;
-        if (profile.Commands.EnforceMode == "monitor") return;
+        if (match is null) return;
 
-        foreach (var patternId in profile.Commands.BlockedPatterns)
+        var profile = ResolveProfile(record);
+        if (profile is null) return;
+        if (string.Equals(profile.Commands.EnforceMode, "monitor", StringComparison.OrdinalIgnoreCase)) return;
+
+        if (profile.Commands.BlockedPatterns.Contains(match.RuleId, StringComparer.OrdinalIgnoreCase))
         {
-            // simple substring match against rule ID prefix — real implementation
-            // would cross-reference against CommandAnalyzer result already computed
-            if (commandLine.Contains(patternId, StringComparison.OrdinalIgnoreCase))
-            {
-                Emit(record, profile.Name, "CommandBlocked", $"Pattern '{patternId}' matched in: {Truncate(commandLine)}");
-                return;
-            }
+            Emit(record, profile.Name, "CommandBlocked",
+                $"Blocked rule [{match.RuleId}] {match.RuleName}: {match.Description}");
         }
     }
 
@@ -45,9 +48,9 @@ public sealed class ViolationDetector
     /// </summary>
     public void CheckFilePath(ProcessRecord record, string path)
     {
-        var profile = _matcher.Match(record);
+        var profile = ResolveProfile(record);
         if (profile is null) return;
-        if (profile.FileSystem.EnforceMode == "monitor") return;
+        if (string.Equals(profile.FileSystem.EnforceMode, "monitor", StringComparison.OrdinalIgnoreCase)) return;
 
         foreach (var denied in profile.FileSystem.DeniedPaths)
         {
@@ -73,6 +76,27 @@ public sealed class ViolationDetector
         ));
     }
 
+    private HarnessProfile? ResolveProfile(ProcessRecord record)
+    {
+        if (record.ProfileName is not null && _matcher.Get(record.ProfileName) is { } byName)
+            return byName;
+
+        if (_matcher.Match(record) is { } direct)
+        {
+            record.ProfileName = direct.Name;
+            return direct;
+        }
+
+        var ancestor = _findProfileAncestor?.Invoke(record.Pid);
+        if (ancestor?.ProfileName is not null && _matcher.Get(ancestor.ProfileName) is { } inherited)
+        {
+            record.ProfileName = inherited.Name;
+            return inherited;
+        }
+
+        return null;
+    }
+
     private static string ExpandVars(string path) =>
         Environment.ExpandEnvironmentVariables(path.Replace("%USERNAME%", Environment.UserName));
 
@@ -87,6 +111,4 @@ public sealed class ViolationDetector
         return path.Equals(pattern, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string Truncate(string s, int max = 80) =>
-        s.Length <= max ? s : s[..max] + "…";
 }

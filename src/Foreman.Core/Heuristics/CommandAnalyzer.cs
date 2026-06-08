@@ -1,4 +1,5 @@
 using Foreman.Core.Models;
+using Foreman.Core.Profiles;
 using System.Text.RegularExpressions;
 
 namespace Foreman.Core.Heuristics;
@@ -14,7 +15,7 @@ public sealed class CommandAnalyzer
     /// Returns null if no rule matches or the match is suppressed.
     /// Call from any thread — thread-safe after PatternLibrary.Initialize().
     /// </summary>
-    public RuleMatch? Analyze(string commandLine, string? processName = null)
+    public RuleMatch? Analyze(string commandLine, string? processName = null, HarnessProfile? profile = null)
     {
         if (string.IsNullOrWhiteSpace(commandLine)) return null;
 
@@ -25,7 +26,7 @@ public sealed class CommandAnalyzer
                 var m = regex.Match(commandLine);
                 if (!m.Success) continue;
 
-                if (FalsePositiveFilter.IsSuppressed(rule, commandLine, processName)) continue;
+                if (FalsePositiveFilter.IsSuppressed(rule, commandLine, processName, profile)) continue;
 
                 return new RuleMatch(
                     rule.Id,

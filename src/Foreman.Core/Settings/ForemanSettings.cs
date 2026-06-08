@@ -74,4 +74,48 @@ public sealed class ForemanSettings
         "priv-008",   // UAC bypass via fodhelper/eventvwr
         "priv-010",   // modify sudoers (NOPASSWD)
     ];
+
+    public LlmTriageSettings LlmTriage { get; set; } = new();
+}
+
+public sealed class LlmTriageSettings
+{
+    public bool Enabled { get; set; } = true;
+    public bool PreventSelfAudit { get; set; } = true;
+    public int MaxEventsPerReview { get; set; } = 20;
+    public List<AuditorPreference> AuditorPreferences { get; set; } =
+    [
+        new()
+        {
+            AuditorId = "codex",
+            AuditorType = "harness",
+            DisplayName = "Codex CLI",
+            TargetHarnessIds = ["claude-code"],
+            MinimumSeverities = ["High", "Critical"],
+            Priority = 100,
+        },
+        new()
+        {
+            AuditorId = "claude-code",
+            AuditorType = "harness",
+            DisplayName = "Claude Code",
+            TargetHarnessIds = ["codex"],
+            MinimumSeverities = ["High", "Critical"],
+            Priority = 100,
+        },
+    ];
+}
+
+public sealed class AuditorPreference
+{
+    public bool Enabled { get; set; } = true;
+    public string AuditorId { get; set; } = string.Empty;
+    /// <summary>harness | api</summary>
+    public string AuditorType { get; set; } = "harness";
+    public string DisplayName { get; set; } = string.Empty;
+    public string[] TargetHarnessIds { get; set; } = [];
+    public string[] MinimumSeverities { get; set; } = ["High", "Critical"];
+    public int Priority { get; set; } = 100;
+    public string? ApiEndpoint { get; set; }
+    public string? Model { get; set; }
 }

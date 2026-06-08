@@ -6,6 +6,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>Foreman.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Resources\foreman.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +23,7 @@
 
   <ItemGroup>
     <Resource Include="Resources\*.ico" />
+    <Resource Include="Resources\*.png" />
   </ItemGroup>
 
 </Project>
