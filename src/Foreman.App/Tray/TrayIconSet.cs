@@ -1,39 +1,59 @@
 using System.Drawing;
-using System.IO;
-using System.Reflection;
+using System.Drawing.Drawing2D;
 
 namespace Foreman.App.Tray;
 
+/// <summary>
+/// Tray icons: a colored "F" on a near-black rounded background, generated programmatically.
+/// The F's colour is the alert level — green (all clear), amber (warning), red (high/critical) —
+/// so the icon itself shows status at a glance. Drawn as three bars rather than a glyph so it
+/// stays crisp when Windows scales it down to tray size.
+/// </summary>
 public static class TrayIconSet
 {
-    public static Icon Green { get; } = LoadIcon("foreman-green.ico");
-    public static Icon Amber { get; } = LoadIcon("foreman-amber.ico");
-    public static Icon Red   { get; } = LoadIcon("foreman-red.ico");
+    public static Icon Green { get; } = CreateLetterIcon(Color.FromArgb(0x49, 0xD0, 0x5B));
+    public static Icon Amber { get; } = CreateLetterIcon(Color.FromArgb(0xF0, 0xB4, 0x3A));
+    public static Icon Red   { get; } = CreateLetterIcon(Color.FromArgb(0xF0, 0x46, 0x46));
 
-    private static Icon LoadIcon(string name)
+    private static Icon CreateLetterIcon(Color letter)
     {
-        var asm = Assembly.GetExecutingAssembly();
-        var res = asm.GetManifestResourceNames().FirstOrDefault(r => r.EndsWith(name, StringComparison.OrdinalIgnoreCase));
-        if (res is not null)
-        {
-            using var stream = asm.GetManifestResourceStream(res)!;
-            return new Icon(stream);
-        }
+        const int n = 32;
+        using var bmp = new Bitmap(n, n);
+        using var g = Graphics.FromImage(bmp);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(Color.Transparent);
 
-        // fallback: generate a solid-color icon programmatically
-        return CreateFallbackIcon(name.Contains("green") ? Color.FromArgb(0x44, 0xCC, 0x55)
-                                : name.Contains("amber") ? Color.FromArgb(0xE8, 0xB2, 0x3C)
-                                :                          Color.FromArgb(0xDD, 0x33, 0x33));
+        // Near-black rounded-square background.
+        using (var bg = new SolidBrush(Color.FromArgb(0xFF, 0x10, 0x12, 0x18)))
+        using (var path = RoundedRect(0.5f, 0.5f, n - 1f, n - 1f, 6f))
+            g.FillPath(bg, path);
+
+        // Colored "F" built from three rectangles (proportional, so it scales cleanly).
+        var pad    = n * 0.24f;
+        var left   = pad;
+        var top    = pad;
+        var bottom = n - pad;
+        var width  = n - 2 * pad;
+        var stemW  = n * 0.17f;
+        var armH   = n * 0.16f;
+
+        using var fb = new SolidBrush(letter);
+        g.FillRectangle(fb, left, top, stemW, bottom - top);                          // vertical stem
+        g.FillRectangle(fb, left, top, width, armH);                                  // top arm
+        g.FillRectangle(fb, left, top + (bottom - top) * 0.42f, width * 0.74f, armH); // middle arm
+
+        return Icon.FromHandle(bmp.GetHicon());
     }
 
-    private static Icon CreateFallbackIcon(Color fill)
+    private static GraphicsPath RoundedRect(float x, float y, float w, float h, float radius)
     {
-        using var bmp = new Bitmap(16, 16);
-        using var g = Graphics.FromImage(bmp);
-        g.Clear(Color.Transparent);
-        using var brush = new SolidBrush(fill);
-        g.FillEllipse(brush, 1, 1, 14, 14);
-        var handle = bmp.GetHicon();
-        return Icon.FromHandle(handle);
+        var path = new GraphicsPath();
+        var d = radius * 2;
+        path.AddArc(x, y, d, d, 180, 90);
+        path.AddArc(x + w - d, y, d, d, 270, 90);
+        path.AddArc(x + w - d, y + h - d, d, d, 0, 90);
+        path.AddArc(x, y + h - d, d, d, 90, 90);
+        path.CloseFigure();
+        return path;
     }
 }
