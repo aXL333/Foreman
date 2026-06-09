@@ -57,6 +57,7 @@ public partial class App : Application
         _mcpHost.State.GetMcpInventory       = () => _monitor.McpInventory.Current;
         _tray.GetProcessSnapshot            = () => _monitor.Tree.GetAll();
         _tray.GetMcpClientCount             = () => _mcpHost.Sessions.Count;
+        _tray.GetMcpToken                   = () => _mcpHost.McpToken;
 
         // allow AlertDetailWindow to resolve a live ProcessRecord from a PID
         // so the ORIGINATING PROCESS section can show process name + harness type
@@ -129,8 +130,9 @@ public partial class App : Application
 
         // first-run dialog deferred to idle so it doesn't block server startup
         var port = settings.McpPort;
+        var mcpToken = _mcpHost.McpToken;
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,
-            () => FirstRunDetector.RunIfNeeded(port));
+            () => FirstRunDetector.RunIfNeeded(port, mcpToken));
     }
 
     protected override void OnExit(ExitEventArgs e)
