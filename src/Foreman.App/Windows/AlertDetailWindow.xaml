@@ -147,7 +147,7 @@
         <!-- ── Why dangerous + What to do ───────────────────────────────── -->
         <ScrollViewer Grid.Row="10" VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Text="WHY THIS IS DANGEROUS" Style="{StaticResource SectionHeader}" />
+                <TextBlock Text="WHAT THIS MEANS" Style="{StaticResource SectionHeader}" />
                 <TextBlock Text="{Binding WhyDangerous}"
                            Style="{StaticResource BodyText}" Margin="0,0,0,18" />
 
