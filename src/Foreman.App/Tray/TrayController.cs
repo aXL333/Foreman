@@ -1,6 +1,7 @@
 using Foreman.App.Windows;
 using Foreman.Core.Behavior;
 using Foreman.Core.Events;
+using Foreman.Core.Integration;
 using Foreman.Core.Models;
 using Foreman.Core.Settings;
 using H.NotifyIcon;
@@ -51,6 +52,9 @@ public sealed class TrayController : IEventSink, IDisposable
 
     /// <summary>Injected from App — applies the Scan MCP tools toggle (start/stop the opt-in outbound probe).</summary>
     public Action<bool>?                                      ApplyScanMcpTools     { get; set; }
+
+    /// <summary>Injected from App — the MCP bearer token, for building Claude Code connect config/commands.</summary>
+    public Func<string>?                                      GetMcpToken           { get; set; }
 
     /// <summary>Injected from App — true when the elevated network sidecar is connected and feeding.</summary>
     public Func<bool>?                                        GetNetCaptureActive   { get; set; }
@@ -351,11 +355,66 @@ public sealed class TrayController : IEventSink, IDisposable
             ? $"MCP Server: port {_settings.McpPort}  ·  {clients} client{(clients == 1 ? "" : "s")}"
             : $"MCP Server: port {_settings.McpPort}  ·  no clients";
         AddMenuItem(menu, mcpLabel, null, enabled: false);
+        AddMenuItem(menu, "Connect Claude Code…", () => ConnectClaudeCode());
         AddMenuItem(menu, "Settings…", () => OpenSettingsWindow());
         menu.Items.Add(new Separator());
         AddMenuItem(menu, "Exit", () => Application.Current.Shutdown());
 
         return menu;
+    }
+
+    // One-click "connect Claude Code to Foreman": write the user-scope MCP entry (with the token) into
+    // ~/.claude.json, or copy the equivalent CLI command. Either way the user just restarts Claude Code.
+    private void ConnectClaudeCode()
+    {
+        var token = GetMcpToken?.Invoke();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            MessageBox.Show(
+                "Foreman's MCP token isn't ready yet — give the server a moment to start, then try again.",
+                "Foreman — Connect Claude Code", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var already = ClaudeMcpConnector.IsConfigured(_settings.McpPort);
+        var choice = MessageBox.Show(
+            (already
+                ? "Claude Code already has a foreman MCP entry for this port. Rewrite it with the current token?\n\n"
+                : "Add Foreman to Claude Code's MCP servers so it can talk to your agents?\n\n") +
+            "Yes — Foreman writes a user-scope \"foreman\" entry into ~/.claude.json (a backup is saved first).\n" +
+            "No — copy the equivalent 'claude mcp add' command to the clipboard instead.\n\n" +
+            "Either way, restart Claude Code afterwards to apply.",
+            "Foreman — Connect Claude Code", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+
+        if (choice == MessageBoxResult.Yes)
+        {
+            var r = ClaudeMcpConnector.Connect(_settings.McpPort, token);
+            if (r.Status == ConnectStatus.Failed)
+                MessageBox.Show(
+                    $"Couldn't update Claude Code's config automatically:\n\n{r.Message}\n\n" +
+                    "Try the copy-command option (choose No) instead.",
+                    "Foreman — Connect Claude Code", MessageBoxButton.OK, MessageBoxImage.Warning);
+            else
+                MessageBox.Show(
+                    $"{r.Message}\n\nRestart Claude Code to connect." +
+                    (r.BackupPath is { } b ? $"\n\nBackup saved: {b}" : ""),
+                    "Foreman — Connect Claude Code", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        else if (choice == MessageBoxResult.No)
+        {
+            try
+            {
+                Clipboard.SetText(ClaudeMcpConnector.BuildCliCommand(_settings.McpPort, token));
+                MessageBox.Show(
+                    "Connect command copied to the clipboard — paste it into a terminal, then restart Claude Code.",
+                    "Foreman — Connect Claude Code", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Couldn't copy to the clipboard: {ex.Message}",
+                    "Foreman — Connect Claude Code", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
     }
 
     private static void AddMenuItem(ContextMenu menu, string header, Action? onClick, bool enabled = true)

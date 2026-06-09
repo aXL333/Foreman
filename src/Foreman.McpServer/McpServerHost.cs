@@ -30,6 +30,9 @@ public sealed class McpServerHost : IAsyncDisposable
     /// <summary>Path of the MCP bearer-token file, so the (Windows) app shell can ACL-restrict it.</summary>
     public string TokenFilePath => _authToken.TokenFilePath;
 
+    /// <summary>The per-install bearer token, so the app shell can build connect instructions/config.</summary>
+    public string McpToken => _authToken.Value;
+
     public McpServerHost(ForemanSettings settings, EventBus bus)
     {
         _settings = settings;
