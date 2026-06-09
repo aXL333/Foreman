@@ -159,9 +159,14 @@
 
         <!-- ── Buttons ───────────────────────────────────────────────────── -->
         <StackPanel Grid.Row="12" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Ask Harness" Click="AskHarnessClick" Margin="0,0,8,0"
+            <Button x:Name="AskHarnessButton" Content="Ask Harness" Click="AskHarnessClick" Margin="0,0,8,0"
                     Background="#FF17243A" BorderBrush="#FF3E6FA8"
-                    Foreground="#FFE5EEF8" MinWidth="104" />
+                    Foreground="#FFE5EEF8" MinWidth="104"
+                    ToolTip="Ask the harness that caused this alert to justify and/or act on it." />
+            <Button x:Name="SendForAuditButton" Content="Send for Audit" Click="SendForAuditClick" Margin="0,0,8,0"
+                    Background="#FF1A2A1F" BorderBrush="#FF3E8A57"
+                    Foreground="#FFDDF8E5" MinWidth="116"
+                    ToolTip="Route this alert to a different agent for an independent review (alarming behavior only)." />
             <Button Content="Kill/End Process" Click="KillProcessClick" Margin="0,0,8,0"
                     Background="#FF34191A" BorderBrush="#FF8A3A3A"
                     Foreground="#FFFFDAD8" MinWidth="132" />
