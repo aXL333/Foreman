@@ -2,6 +2,7 @@ using Foreman.Core.Behavior;
 using Foreman.Core.Events;
 using Foreman.Core.Models;
 using Foreman.Core.Settings;
+using Foreman.McpServer;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -47,11 +48,23 @@ public partial class AlertDetailWindow : Window
     /// </summary>
     public static Func<int, DateTimeOffset?, bool>? KillProcessByPid { get; set; }
 
+    /// <summary>
+    /// Wired up by App.xaml.cs. "Ask Harness": deliver a justify/act prompt to the OFFENDING harness's
+    /// own MCP session (sampling round-trip → targeted notification). Returns how it was delivered;
+    /// <see cref="AskOutcome.NoSession"/> means the caller falls back to the clipboard.
+    /// Args: (harnessId, systemPrompt, userPrompt, cancellationToken).
+    /// </summary>
+    public static Func<string, string, string, CancellationToken, Task<AskOffenderResult>>? AskOffender { get; set; }
+
     private AlertDetailWindow(ForemanEvent evt)
     {
         _event = evt;
         InitializeComponent();
         DataContext = new AlertDetailVm(evt);
+
+        // "Send for Audit" is only meaningful for alarming behavior (not hangs/mess/notices).
+        SendForAuditButton.Visibility =
+            AuditPolicy.QualifiesForAudit(evt) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Opens an AlertDetailWindow for the given event and forces it to the foreground.</summary>
@@ -89,39 +102,114 @@ public partial class AlertDetailWindow : Window
         Close();
     }
 
-    private void AskHarnessClick(object sender, RoutedEventArgs e)
+    // "Ask Harness": prompt the OFFENDING harness itself to justify and/or act. Delivered to its own
+    // live MCP session when possible (sampling round-trip → targeted notification), else a clipboard
+    // prompt scoped to that harness. Applies to every alert type, including hangs/mess.
+    private async void AskHarnessClick(object sender, RoutedEventArgs e)
+    {
+      try
+      {
+        var harnessId   = ResolveTargetHarnessId();
+        var pid         = ResolveTargetPid();
+        var processName = ResolveTargetProcessName();
+        var prompt      = BuildSelfJustifyPrompt(harnessId, pid, processName);
+        const string systemPrompt =
+            "You are the AI coding agent that Foreman (a local watchdog on this machine) flagged. " +
+            "This is a self-audit. Answer honestly and briefly: say what you were doing and whether it " +
+            "is expected, then either justify it or take the corrective action requested.";
+
+        // Try to deliver to the offender's own live MCP session. Bounded so a slow or declining client
+        // can't hang the UI; any failure falls through to the clipboard.
+        AskOffenderResult? result = null;
+        if (AskOffender is not null && !string.IsNullOrWhiteSpace(harnessId))
+        {
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                result = await AskOffender(harnessId!, systemPrompt, prompt, cts.Token);
+            }
+            catch { result = null; }
+        }
+
+        var clipped = TrySetClipboard(prompt);
+        const string title = "Foreman - Ask Harness";
+
+        switch (result?.Outcome)
+        {
+            case AskOutcome.Sampled:
+                EventBus.Instance.Publish(new InfoEvent(DateTimeOffset.UtcNow, "Foreman",
+                    $"Ask Harness: {Blank(result.MatchedClient, harnessId ?? "harness")} responded to alert [{_event.Id}]"));
+                MessageBox.Show(
+                    $"Asked the live {Blank(result.MatchedClient, harnessId ?? "harness")} session to account for this alert.\n\n" +
+                    $"Its response:\n\n{Blank(result.ReplyText, "(the harness returned an empty response)")}",
+                    title, MessageBoxButton.OK, MessageBoxImage.Information);
+                break;
+
+            case AskOutcome.Notified:
+                MessageBox.Show(
+                    $"Delivered a justify/act request to the live {Blank(result.MatchedClient, harnessId ?? "harness")} MCP session — " +
+                    "check that session for its response.\n\n" +
+                    "(That client doesn't support being queried directly, so no reply returns to Foreman. " +
+                    (clipped ? "The prompt is also on your clipboard.)" : ")"),
+                    title, MessageBoxButton.OK, MessageBoxImage.Information);
+                break;
+
+            default:  // NoSession, or MCP not wired / harness unresolved
+                var owner = pid is int p
+                    ? $"the {Blank(harnessId, "harness")} that owns pid {p}"
+                    : $"the {Blank(harnessId, "offending harness")}";
+                MessageBox.Show(
+                    string.IsNullOrWhiteSpace(harnessId)
+                        ? "Foreman couldn't attribute this alert to a specific harness."
+                        : $"No live {harnessId} session is connected to Foreman's MCP, so the request couldn't be delivered automatically.\n\n" +
+                          (clipped
+                              ? $"A justify/act prompt is on your clipboard — paste it into {owner}."
+                              : "(Copying the prompt to the clipboard failed.)"),
+                    title, MessageBoxButton.OK, MessageBoxImage.Information);
+                break;
+        }
+      }
+      catch (Exception ex)
+      {
+          MessageBox.Show($"Ask Harness failed.\n\n{ex.GetType().Name}: {ex.Message}",
+              "Foreman - Ask Harness", MessageBoxButton.OK, MessageBoxImage.Warning);
+      }
+    }
+
+    // "Send for Audit": route this alert to a DIFFERENT (non-self) auditor harness/API for an
+    // independent second opinion. Shown only for alarming behavior (see AuditPolicy).
+    private void SendForAuditClick(object sender, RoutedEventArgs e)
     {
         var targetHarnessId = ResolveTargetHarnessId();
-        var route = ResolveAuditRoute(targetHarnessId, _event.Severity);
+        // A category-qualified alert (flagged command / permission hit) can be Medium; treat it as
+        // alarming for routing so it still matches auditors whose minimum severity is High.
+        var severity = AuditPolicy.QualifiesForAudit(_event) && _event.Severity < ForemanSeverity.High
+            ? ForemanSeverity.High
+            : _event.Severity;
+        var route  = ResolveAuditRoute(targetHarnessId, severity);
         var prompt = BuildAuditPrompt(targetHarnessId, route.Selected);
 
-        try
+        if (!TrySetClipboard(prompt))
         {
-            Clipboard.SetText(prompt);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                $"Could not copy the audit prompt to the clipboard.\n\n{ex.GetType().Name}: {ex.Message}",
-                "Foreman - Ask Harness",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            MessageBox.Show("Could not copy the audit prompt to the clipboard.",
+                "Foreman - Send for Audit", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        EventBus.Instance.Publish(new InfoEvent(
-            DateTimeOffset.UtcNow,
-            "Foreman",
+        EventBus.Instance.Publish(new InfoEvent(DateTimeOffset.UtcNow, "Foreman",
             $"Audit prompt prepared for alert [{_event.Id}] via {route.Selected?.DisplayName ?? "manual route"}"));
 
-        MessageBox.Show(
-            BuildAskHarnessMessage(targetHarnessId, route),
-            "Foreman - Ask Harness",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        MessageBox.Show(BuildAuditMessage(targetHarnessId, route),
+            "Foreman - Send for Audit", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private string BuildAskHarnessMessage(string? targetHarnessId, AuditRouteSelection route)
+    private static bool TrySetClipboard(string text)
+    {
+        try { Clipboard.SetText(text); return true; }
+        catch { return false; }
+    }
+
+    private string BuildAuditMessage(string? targetHarnessId, AuditRouteSelection route)
     {
         var target = Blank(targetHarnessId, "this process");
         var sb = new StringBuilder();
@@ -148,14 +236,79 @@ public partial class AlertDetailWindow : Window
                 : $"{a.DisplayName} is your preferred reviewer for {target}, but isn't running right now — start it, or paste the prompt into any AI.");
         }
 
-        if (route.UsedSeverityFallback)
-        {
-            sb.AppendLine();
-            sb.AppendLine($"(This alert is {_event.Severity}, below the High/Critical level auto-triage routes, so this is a manual suggestion — not an automatic hand-off.)");
-        }
-
         return sb.ToString().TrimEnd();
     }
+
+    // The offender-directed (second-person) "justify and/or act" prompt. Reuses the same event-detail
+    // and secret-masking helpers as the audit prompt, but addresses the harness that caused the alert.
+    private string BuildSelfJustifyPrompt(string? harnessId, int? pid, string? processName)
+    {
+        var vm = DataContext as AlertDetailVm;
+        var liveProcess = pid is int p ? GetProcessByPid?.Invoke(p) : null;
+        var commandLine = ResolveTargetCommandLine(liveProcess);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Foreman — a local watchdog monitoring the AI coding agents on this machine — flagged an action attributed to you. This is a self-audit; account for it.");
+        sb.AppendLine();
+        sb.AppendLine("Alert");
+        sb.AppendLine($"- Id: {_event.Id}");
+        sb.AppendLine($"- Type: {vm?.EventTypeLabel ?? _event.GetType().Name}");
+        sb.AppendLine($"- Severity: {_event.Severity}");
+        sb.AppendLine($"- When: {_event.Timestamp:O}");
+        sb.AppendLine($"- What Foreman saw: {_event.Message}");
+        sb.AppendLine();
+        sb.AppendLine("You");
+        sb.AppendLine($"- Harness: {Blank(harnessId, "unknown")}");
+        sb.AppendLine($"- Process: {Blank(processName, "unknown")}{(pid is int pp ? $" (pid {pp})" : "")}");
+
+        if (!string.IsNullOrWhiteSpace(commandLine))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Command line (potential secrets masked):");
+            sb.AppendLine(RedactSecrets(commandLine));
+        }
+
+        AppendEventSpecificDetails(sb);
+
+        if (vm is not null && !string.IsNullOrWhiteSpace(vm.WhyDangerous))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Why Foreman flagged it:");
+            sb.AppendLine(vm.WhyDangerous);
+        }
+
+        sb.AppendLine();
+        sb.AppendLine(BuildAskLine());
+        return sb.ToString();
+    }
+
+    // The concrete second-person ask, tailored to the alert type. Low/Medium housekeeping alerts may
+    // be acknowledged by the harness itself (the AcknowledgeAlert MCP tool is gated to refuse
+    // High/Critical, so a serious alert can't be self-silenced).
+    private string BuildAskLine() => _event switch
+    {
+        HangDetectedEvent =>
+            "This process has gone silent. Is it still doing useful work, or is it stuck/abandoned? " +
+            "If it's stuck or no longer needed, abort it (Ctrl+C) or reap the child; otherwise explain " +
+            "what it's waiting on. If this is a false alarm you may acknowledge the alert.",
+        OrphanDetectedEvent =>
+            "This child process outlived its parent. Is that intentional? If not, terminate it; if it " +
+            "is, explain why — you may acknowledge the alert once accounted for.",
+        NonzeroExitEvent =>
+            "A process you launched exited non-zero. Explain what failed and whether you've handled it. " +
+            "You may acknowledge the alert if this is expected.",
+        CommandAlertEvent =>
+            "Justify this command: what task required it, and is it safe as written? If it was a mistake " +
+            "or unnecessary, do not run it (or abort it) and say so.",
+        PermissionViolationEvent =>
+            "Justify this access against your current task, or confirm it was unintended and stop.",
+        EscalationEvent =>
+            "Your recent activity tripped Foreman's escalation. Summarize what you're doing and why it " +
+            "shouldn't be treated as alarming — or correct course.",
+        _ =>
+            "Account for this alert: explain whether it's expected and either justify it or take the " +
+            "corrective action.",
+    };
 
     private void KillProcessClick(object sender, RoutedEventArgs e)
     {
@@ -340,14 +493,9 @@ public partial class AlertDetailWindow : Window
             return new AuditRouteSelection(null, "LLM triage routing is disabled in settings.", false);
 
         var candidates = FindAuditCandidates(settings, targetHarnessId, severity, honorSeverity: true);
-        if (candidates.Count > 0)
-            return new AuditRouteSelection(candidates[0], "Auditor selected from user preference list.", false);
-
-        candidates = FindAuditCandidates(settings, targetHarnessId, severity, honorSeverity: false);
-        if (candidates.Count > 0)
-            return new AuditRouteSelection(candidates[0], "Auditor selected from user preference list for a manual ask.", true);
-
-        return new AuditRouteSelection(null, "No auditor preference matched this target harness.", false);
+        return candidates.Count > 0
+            ? new AuditRouteSelection(candidates[0], "Auditor selected from user preference list.", false)
+            : new AuditRouteSelection(null, "No auditor preference matched this target harness at this severity.", false);
     }
 
     private static List<AuditCandidate> FindAuditCandidates(
