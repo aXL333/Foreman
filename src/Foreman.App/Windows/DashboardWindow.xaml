@@ -225,10 +225,11 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="8" CornerRadius="8"
+                <Border x:Name="McpClientsCard" Grid.Column="8" CornerRadius="8"
                         Background="{StaticResource SurfaceRaisedBrush}"
                         BorderBrush="{StaticResource BorderBrush}"
-                        BorderThickness="1" Padding="14,10">
+                        BorderThickness="1" Padding="14,10"
+                        ToolTipService.ShowDuration="20000">
                     <StackPanel>
                         <TextBlock x:Name="McpClientsLabel"
                                    Text="0"
@@ -400,6 +401,7 @@
                     <Button Content="Harnesses" Click="OpenHarnessesClick" Margin="0,0,8,0" />
                     <Button Content="Behavior Metrics" Click="OpenBehaviorMetricsClick" Margin="0,0,8,0" />
                     <Button Content="Settings" Click="OpenSettingsClick" Margin="0,0,8,0" />
+                    <Button Content="Connect agent" Click="ConnectAgentClick" Margin="0,0,8,0" />
                     <Button Content="Event Log" Click="OpenLogClick" Style="{StaticResource PrimaryButton}" />
                 </StackPanel>
                 <TextBlock x:Name="FooterText"

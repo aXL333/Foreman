@@ -58,6 +58,7 @@ public partial class App : Application
         _tray.GetProcessSnapshot            = () => _monitor.Tree.GetAll();
         _tray.GetMcpClientCount             = () => _mcpHost.Sessions.Count;
         _tray.GetMcpToken                   = () => _mcpHost.McpToken;
+        _tray.GetConnectedClients           = () => _mcpHost.Sessions.DescribeSessions();
 
         // allow AlertDetailWindow to resolve a live ProcessRecord from a PID
         // so the ORIGINATING PROCESS section can show process name + harness type

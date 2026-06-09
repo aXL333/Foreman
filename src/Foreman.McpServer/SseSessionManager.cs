@@ -5,6 +5,9 @@ using ModelContextProtocol.Protocol;
 
 namespace Foreman.McpServer;
 
+/// <summary>A connected MCP client's self-announced identity and the capabilities it advertised.</summary>
+public sealed record McpClientInfo(string Name, string? Version, bool Sampling, bool Elicitation);
+
 /// <summary>How an "Ask Harness" request to the offender's own session was delivered.</summary>
 public enum AskOutcome { Sampled, Notified, NoSession }
 
@@ -33,6 +36,18 @@ public sealed class SseSessionManager
     }
 
     public void Unregister(string id) => _sessions.TryRemove(id, out _);
+
+    /// <summary>
+    /// Snapshot of every connected client's announced identity + capabilities. Used by the dashboard
+    /// to show which agents are connected and whether each supports the sampling round-trip that makes
+    /// Ask Harness a true poll (vs. a one-way notification).
+    /// </summary>
+    public IReadOnlyList<McpClientInfo> DescribeSessions() =>
+        _sessions.Values.Select(s => new McpClientInfo(
+            ClientLabel(s) ?? "unknown client",
+            s.ClientInfo?.Version,
+            s.ClientCapabilities?.Sampling is not null,
+            s.ClientCapabilities?.Elicitation is not null)).ToList();
 
     /// <summary>
     /// Pushes notifications/message to every currently-connected MCP client.
