@@ -138,20 +138,31 @@ dotnet publish src/Foreman.App/Foreman.App.csproj ^
 
 ## Connect your agent
 
-Foreman's MCP server listens on `http://localhost:54321/mcp` while the tray app is running. To connect Claude Code, add this to your `.claude/settings.json`:
+Foreman's MCP server listens on `http://localhost:54321/mcp` while the tray app is running. The `/mcp` endpoint requires a per-install **bearer token** (the `/health` endpoint stays open). Your token is generated on first run and stored, owner-only, at `%LocalAppData%\Foreman\mcp.token`.
+
+The simplest way to connect Claude Code (user scope, so every project picks it up):
+
+```bash
+claude mcp add --transport http foreman http://localhost:54321/mcp \
+  --header "Authorization: Bearer <paste-token-from-mcp.token>" \
+  --scope user
+```
+
+Or add it to your MCP config (`~/.claude.json` or a project `.mcp.json`) directly:
 
 ```json
 {
   "mcpServers": {
     "foreman": {
       "type": "http",
-      "url": "http://localhost:54321/mcp"
+      "url": "http://localhost:54321/mcp",
+      "headers": { "Authorization": "Bearer <paste-token-from-mcp.token>" }
     }
   }
 }
 ```
 
-Any MCP client that speaks streamable HTTP can connect the same way. Confirm the server is up with a quick `GET http://localhost:54321/health`.
+Without the token the connection is refused with `401` and Foreman shows **no session** for that agent (so Ask Harness falls back to the clipboard). Any MCP client that speaks streamable HTTP can connect the same way; confirm the server is up with `GET http://localhost:54321/health`.
 
 ## Configuration
 

@@ -24,10 +24,6 @@ public static class FirstRunDetector
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude");
         var hasClaudeCode = Directory.Exists(claudeDir);
 
-        var mcpJson = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".mcp.json");
-        var mcpConfigured = File.Exists(mcpJson);
-
         var msg = hasClaudeCode
             ? $"""
               Welcome to Foreman!
@@ -35,9 +31,12 @@ public static class FirstRunDetector
               Claude Code has been detected on this machine.
 
               Foreman's MCP server is running on port {mcpPort}.
-              {(mcpConfigured
-                  ? "Your ~/.mcp.json is already configured — Claude Code will connect automatically."
-                  : $"To connect Claude Code, run:\n\n  claude mcp add foreman http://localhost:{mcpPort}/mcp\n\nOr add to ~/.mcp.json:\n  \"foreman\": {{ \"type\": \"http\", \"url\": \"http://localhost:{mcpPort}/mcp\" }}")}
+              To connect Claude Code, run:
+
+                claude mcp add --transport http foreman http://localhost:{mcpPort}/mcp --header "Authorization: Bearer <token>" --scope user
+
+              Your token is in %LocalAppData%\Foreman\mcp.token — the /mcp endpoint
+              requires it; without it the connection is refused (401).
 
               Foreman will watch agent process trees, flag risky CLI patterns,
               attribute spawned processes and expose audit routes so another
