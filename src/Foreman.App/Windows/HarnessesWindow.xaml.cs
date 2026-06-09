@@ -2,12 +2,13 @@ using Foreman.Core.Models;
 using Foreman.Core.Settings;
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 
 namespace Foreman.App.Windows;
 
-public partial class HarnessesWindow : Window
+public partial class HarnessesWindow : UserControl
 {
     private readonly ForemanSettings _settings;
     private readonly Func<IEnumerable<ProcessRecord>> _getSnapshot;
@@ -121,10 +122,11 @@ public partial class HarnessesWindow : Window
             .ToList();
 
         SettingsStore.Save(_settings);
-        Close();
+        Refresh();   // reflect persisted state (this is a tab, so we stay put rather than closing)
     }
 
-    private void CancelClick(object sender, RoutedEventArgs e) => Close();
+    // Revert: rebuild rows from the persisted settings, discarding unsaved toggles.
+    private void CancelClick(object sender, RoutedEventArgs e) => Refresh();
 }
 
 /// <summary>View model for a single harness row.</summary>

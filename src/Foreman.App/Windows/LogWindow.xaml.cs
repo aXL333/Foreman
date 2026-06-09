@@ -6,12 +6,13 @@ using System.ComponentModel;
 using System.IO;
 using System.Text;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 
 namespace Foreman.App.Windows;
 
-public partial class LogWindow : Window, IEventSink
+public partial class LogWindow : UserControl, IEventSink, IDisposable
 {
     private const int MaxEvents = 5000;
     private readonly ObservableCollection<EventViewModel> _events = [];
@@ -142,7 +143,7 @@ public partial class LogWindow : Window, IEventSink
             DefaultExt = ".csv",
         };
 
-        if (dlg.ShowDialog(this) != true) return;
+        if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
 
         try
         {
@@ -211,9 +212,9 @@ public partial class LogWindow : Window, IEventSink
             _autoScroll = e.VerticalOffset >= e.ExtentHeight - e.ViewportHeight - 1;
     }
 
-    protected override void OnClosed(EventArgs e)
+    // Called by the host (DashboardWindow) when it closes, since a UserControl has no OnClosed.
+    public void Dispose()
     {
         EventBus.Instance.Unsubscribe(this);
-        base.OnClosed(e);
     }
 }

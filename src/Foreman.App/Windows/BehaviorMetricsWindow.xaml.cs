@@ -2,12 +2,13 @@ using Foreman.Core.Behavior;
 using Foreman.Core.Models;
 using Foreman.Core.Settings;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace Foreman.App.Windows;
 
-public partial class BehaviorMetricsWindow : Window
+public partial class BehaviorMetricsWindow : UserControl, IDisposable
 {
     private readonly Func<IEnumerable<BehaviorProfile>>   _getProfiles;
     private readonly Action<string>                        _resetProfile;
@@ -98,12 +99,10 @@ public partial class BehaviorMetricsWindow : Window
         Refresh();
     }
 
-    private void CloseClick(object sender, RoutedEventArgs e) => Close();
-
-    protected override void OnClosed(EventArgs e)
+    // Called by the host (DashboardWindow) when it closes, since a UserControl has no OnClosed.
+    public void Dispose()
     {
         _timer.Stop();
-        base.OnClosed(e);
     }
 }
 
