@@ -140,7 +140,7 @@ dotnet publish src/Foreman.App/Foreman.App.csproj ^
 
 Foreman's MCP server listens on `http://localhost:54321/mcp` while the tray app is running. The `/mcp` endpoint requires a per-install **bearer token** (the `/health` endpoint stays open). Your token is generated on first run and stored, owner-only, at `%LocalAppData%\Foreman\mcp.token`.
 
-**One click:** on first run (or any time via the tray menu → **Connect Claude Code…**), Foreman can add the user-scope `foreman` entry to your `~/.claude.json` for you — token and all, with a backup of the original. Restart Claude Code afterwards. The rest of this section is the manual equivalent.
+**Easiest — in the app:** on first run, or any time via the tray menu → **Connect agent…** (also a button on the Dashboard), Foreman opens a short guide. For Claude Code it's one click — Foreman adds the user-scope `foreman` entry to your `~/.claude.json` (token and all, with a backup). For any other MCP client it shows a copy-paste config with the URL + token. Restart the agent afterwards. The rest of this section is the manual equivalent.
 
 The simplest manual way to connect Claude Code (user scope, so every project picks it up):
 

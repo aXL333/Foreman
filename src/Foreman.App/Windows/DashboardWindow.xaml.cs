@@ -1,6 +1,7 @@
 using Foreman.Core.Behavior;
 using Foreman.Core.Events;
 using Foreman.Core.Models;
+using Foreman.McpServer;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
@@ -34,6 +35,12 @@ public partial class DashboardWindow : Window, IEventSink
     public Func<int>?  GetMcpClientCount      { get; set; }
     public Func<bool>? GetNetCaptureConnected { get; set; }
     public int         McpPort                { get; set; } = 54321;
+
+    /// <summary>Connected MCP clients + capabilities, for the MCP CLIENTS tooltip.</summary>
+    public Func<IReadOnlyList<McpClientInfo>>? GetConnectedClients { get; set; }
+
+    /// <summary>Opens the "Connect agent" guide window.</summary>
+    public Action? OpenConnectAgentRequested { get; set; }
 
     public DashboardWindow(Func<IEnumerable<BehaviorProfile>> getProfiles)
     {
@@ -113,6 +120,15 @@ public partial class DashboardWindow : Window, IEventSink
         McpClientsLabel.Text = (GetMcpClientCount?.Invoke() ?? 0).ToString(CultureInfo.InvariantCulture);
         NetCaptureLabel.Text = GetNetCaptureConnected?.Invoke() == true ? "On" : "Off";
 
+        // Per-session capability breakdown on the MCP CLIENTS card (hover): which connected agents
+        // support the sampling round-trip that makes Ask Harness a true poll vs. a one-way notify.
+        var clients = GetConnectedClients?.Invoke() ?? [];
+        McpClientsCard.ToolTip = clients.Count == 0
+            ? "No agents connected to Foreman's MCP.\nRight-click the tray → Connect agent, or use the Connect agent button."
+            : "Connected agents:\n" + string.Join("\n", clients.Select(c =>
+                $"  • {c.Name}{(string.IsNullOrWhiteSpace(c.Version) ? "" : $" v{c.Version}")} — " +
+                $"sampling: {(c.Sampling ? "yes (Ask Harness gets a reply)" : "no (Ask Harness notifies one-way)")}"));
+
         // ── Footer ────────────────────────────────────────────────────────────
         var meta = $"Foreman v{Version}  ·  up {Uptime()}  ·  MCP :{McpPort}";
         FooterText.Text = relevant.Count == 0
@@ -150,6 +166,9 @@ public partial class DashboardWindow : Window, IEventSink
 
     private void OpenSettingsClick(object sender, RoutedEventArgs e) =>
         OpenSettingsRequested?.Invoke();
+
+    private void ConnectAgentClick(object sender, RoutedEventArgs e) =>
+        OpenConnectAgentRequested?.Invoke();
 
     private static string Version =>
         System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1";

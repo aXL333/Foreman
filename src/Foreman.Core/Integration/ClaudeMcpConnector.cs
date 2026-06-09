@@ -29,6 +29,24 @@ public static class ClaudeMcpConnector
         $"claude mcp add --transport http foreman {Url(port)} " +
         $"--header \"Authorization: Bearer {token}\" --scope user";
 
+    private static JsonObject ServerObject(int port, string token) => new()
+    {
+        ["type"]    = "http",
+        ["url"]     = Url(port),
+        ["headers"] = new JsonObject { ["Authorization"] = $"Bearer {token}" },
+    };
+
+    private static readonly JsonSerializerOptions _pretty = new() { WriteIndented = true };
+
+    /// <summary>The full mcpServers wrapper to paste into ~/.claude.json (Claude Code).</summary>
+    public static string BuildClaudeConfigSnippet(int port, string token) =>
+        new JsonObject { ["mcpServers"] = new JsonObject { ["foreman"] = ServerObject(port, token) } }
+            .ToJsonString(_pretty);
+
+    /// <summary>Just the foreman server entry, for clients that take a single server object.</summary>
+    public static string BuildServerEntrySnippet(int port, string token) =>
+        ServerObject(port, token).ToJsonString(_pretty);
+
     /// <summary>True if ~/.claude.json already has a top-level foreman entry for this port with a token.</summary>
     public static bool IsConfigured(int port, string? configPath = null)
     {
