@@ -179,7 +179,11 @@
                             Click="CopyPidClick" IsEnabled="False"
                             Margin="0,0,6,0" />
                     <Button x:Name="CopyCmdBtn" Content="Copy cmd"
-                            Click="CopyCmdClick" IsEnabled="False" />
+                            Click="CopyCmdClick" IsEnabled="False"
+                            Margin="0,0,6,0" />
+                    <Button x:Name="CopyHashBtn" Content="Copy hash"
+                            Click="CopyHashClick" IsEnabled="False"
+                            ToolTip="Copy the executable's full SHA-256." />
                 </StackPanel>
             </Grid>
         </Border>
