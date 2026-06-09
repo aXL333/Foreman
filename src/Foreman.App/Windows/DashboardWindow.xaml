@@ -67,9 +67,44 @@
             <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
             <Setter Property="Margin" Value="0,2,0,0" />
         </Style>
+
+        <!-- ── Dark-themed tabs ─────────────────────────────────────────────── -->
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="{StaticResource BackgroundBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style TargetType="TabItem">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="TB" Background="Transparent" Padding="16,9" Margin="0,0,2,0"
+                                CornerRadius="6,6,0,0" BorderThickness="0,0,0,2" BorderBrush="Transparent">
+                            <ContentPresenter ContentSource="Header"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TB" Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TB" Property="Background" Value="{StaticResource SurfaceBrush}" />
+                                <Setter TargetName="TB" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
-    <Grid>
+    <TabControl x:Name="Tabs" Padding="0,8,0,0">
+      <TabItem Header="Overview">
+        <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />   <!-- r0: header -->
             <RowDefinition Height="Auto" />   <!-- r1: status strip -->
@@ -410,5 +445,12 @@
                            Foreground="{StaticResource TextMutedBrush}" />
             </Grid>
         </Border>
-    </Grid>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="Processes"><ContentControl x:Name="ProcessSlot" /></TabItem>
+      <TabItem Header="Harnesses"><ContentControl x:Name="HarnessSlot" /></TabItem>
+      <TabItem Header="Behavior"><ContentControl x:Name="BehaviorSlot" /></TabItem>
+      <TabItem Header="Event Log"><ContentControl x:Name="LogSlot" /></TabItem>
+    </TabControl>
 </Window>

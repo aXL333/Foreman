@@ -23,6 +23,7 @@ public partial class DashboardWindow : Window, IEventSink
     private readonly Func<IEnumerable<BehaviorProfile>> _getProfiles;
     private readonly ObservableCollection<DashboardAlertVm> _alerts = [];
     private readonly DispatcherTimer _refreshTimer;
+    private readonly List<IDisposable> _hostedViews = [];
 
     /// <summary>Wired by TrayController so "Open Full Log" can open the log window.</summary>
     public Action? OpenLogRequested { get; set; }
@@ -152,23 +153,33 @@ public partial class DashboardWindow : Window, IEventSink
         }
     }
 
-    private void OpenLogClick(object sender, RoutedEventArgs e) =>
-        OpenLogRequested?.Invoke();
-
-    private void OpenProcessMonitorClick(object sender, RoutedEventArgs e) =>
-        OpenProcessMonitorRequested?.Invoke();
-
-    private void OpenHarnessesClick(object sender, RoutedEventArgs e) =>
-        OpenHarnessesRequested?.Invoke();
-
-    private void OpenBehaviorMetricsClick(object sender, RoutedEventArgs e) =>
-        OpenBehaviorMetricsRequested?.Invoke();
+    private void OpenLogClick(object sender, RoutedEventArgs e) => ShowTab(DashboardTab.Log);
+    private void OpenProcessMonitorClick(object sender, RoutedEventArgs e) => ShowTab(DashboardTab.Processes);
+    private void OpenHarnessesClick(object sender, RoutedEventArgs e) => ShowTab(DashboardTab.Harnesses);
+    private void OpenBehaviorMetricsClick(object sender, RoutedEventArgs e) => ShowTab(DashboardTab.Behavior);
 
     private void OpenSettingsClick(object sender, RoutedEventArgs e) =>
         OpenSettingsRequested?.Invoke();
 
     private void ConnectAgentClick(object sender, RoutedEventArgs e) =>
         OpenConnectAgentRequested?.Invoke();
+
+    // ── Tabs / hosted views ───────────────────────────────────────────────────
+
+    public enum DashboardTab { Overview = 0, Processes = 1, Harnesses = 2, Behavior = 3, Log = 4 }
+
+    public void ShowTab(DashboardTab tab) => Tabs.SelectedIndex = (int)tab;
+
+    /// <summary>Injects the monitoring views (built by the tray) into their tabs; disposed on close.</summary>
+    public void HostViews(UIElement? processes, UIElement? harnesses, UIElement? behavior, UIElement? log)
+    {
+        ProcessSlot.Content  = processes;
+        HarnessSlot.Content  = harnesses;
+        BehaviorSlot.Content = behavior;
+        LogSlot.Content      = log;
+        foreach (var v in new object?[] { processes, harnesses, behavior, log })
+            if (v is IDisposable d) _hostedViews.Add(d);
+    }
 
     private static string Version =>
         System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1";
@@ -190,6 +201,8 @@ public partial class DashboardWindow : Window, IEventSink
     {
         EventBus.Instance.Unsubscribe(this);
         _refreshTimer.Stop();
+        foreach (var d in _hostedViews) { try { d.Dispose(); } catch { /* best-effort */ } }
+        _hostedViews.Clear();
         base.OnClosed(e);
     }
 

@@ -9,7 +9,7 @@ using System.Windows.Threading;
 
 namespace Foreman.App.Windows;
 
-public partial class ProcessMonitorWindow : Window
+public partial class ProcessMonitorWindow : UserControl, IDisposable
 {
     private readonly Func<IEnumerable<ProcessRecord>> _getSnapshot;
     private readonly Func<int, double?>? _getNetRate;
@@ -161,11 +161,11 @@ public partial class ProcessMonitorWindow : Window
         }
     }
 
-    protected override void OnClosed(EventArgs e)
+    // Called by the host (DashboardWindow) when it closes, since a UserControl has no OnClosed.
+    public void Dispose()
     {
         _timer.Stop();
         _sampler.Dispose();
-        base.OnClosed(e);
     }
 }
 

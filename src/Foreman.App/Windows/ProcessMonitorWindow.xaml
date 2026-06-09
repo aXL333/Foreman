@@ -1,15 +1,11 @@
-<Window x:Class="Foreman.App.Windows.ProcessMonitorWindow"
+<UserControl x:Class="Foreman.App.Windows.ProcessMonitorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Foreman — Process Monitor"
-        Icon="/Resources/foreman.ico"
-        Width="1160" Height="520"
-        MinWidth="680" MinHeight="340"
         Background="{StaticResource BackgroundBrush}"
         Foreground="{StaticResource TextPrimaryBrush}"
         FontFamily="Segoe UI, Arial">
 
-    <Window.Resources>
+    <UserControl.Resources>
         <Style TargetType="Button">
             <Setter Property="Background" Value="#FF1E2028" />
             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
@@ -47,7 +43,7 @@
             <Setter Property="Padding" Value="8,5" />
             <Setter Property="BorderBrush" Value="#FF1E2028" />
         </Style>
-    </Window.Resources>
+    </UserControl.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
@@ -188,4 +184,4 @@
             </Grid>
         </Border>
     </Grid>
-</Window>
+</UserControl>

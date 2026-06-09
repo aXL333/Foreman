@@ -19,14 +19,10 @@ public sealed class TrayController : IEventSink, IDisposable
     private readonly ForemanSettings _settings;
     private readonly EventBus _bus;
     private TaskbarIcon? _tray;
-    private LogWindow? _logWindow;
-    private DashboardWindow? _dashboardWindow;
+    private DashboardWindow? _dashboardWindow;   // hosts Process/Harness/Behavior/Log as tabs
     private TrayStatus _status = TrayStatus.Green;
     private int _activeAlerts;
     private SettingsWindow? _settingsWindow;
-    private HarnessesWindow? _harnessesWindow;
-    private BehaviorMetricsWindow? _behaviorWindow;
-    private ProcessMonitorWindow? _processWindow;
     private ConnectAgentWindow? _connectWindow;
     private ForemanEvent? _lastBalloonEvent;
     private EscalationLevel _highestEscalation = EscalationLevel.Watch;
@@ -246,69 +242,44 @@ public sealed class TrayController : IEventSink, IDisposable
         if (_dashboardWindow is null || !_dashboardWindow.IsLoaded)
         {
             var w = new DashboardWindow(GetBehaviorProfiles ?? (() => []));
-            w.OpenLogRequested = () => OpenLogWindow();
-            w.OpenProcessMonitorRequested = () => OpenProcessMonitorWindow();
-            w.OpenHarnessesRequested = () => OpenHarnessesWindow();
-            w.OpenBehaviorMetricsRequested = () => OpenBehaviorMetricsWindow();
             w.OpenSettingsRequested = () => OpenSettingsWindow();
+            w.OpenConnectAgentRequested = () => OpenConnectAgentWindow();
             w.GetMcpClientCount = GetMcpClientCount;
             w.GetNetCaptureConnected = GetNetCaptureActive;
             w.GetConnectedClients = GetConnectedClients;
-            w.OpenConnectAgentRequested = () => OpenConnectAgentWindow();
             w.McpPort = _settings.McpPort;
+
+            // The monitoring views are now tabs inside the dashboard; build them here (the tray is the
+            // composition root that holds the data providers) and hand them to the dashboard to host.
+            Func<IEnumerable<Foreman.Core.Models.ProcessRecord>> snap = GetProcessSnapshot ?? (() => []);
+            w.HostViews(
+                processes: new ProcessMonitorWindow(snap, GetNetRate),
+                harnesses: new HarnessesWindow(_settings, snap),
+                behavior:  new BehaviorMetricsWindow(
+                    _settings,
+                    GetBehaviorProfiles   ?? (() => []),
+                    ResetBehaviorProfile  ?? (_ => { }),
+                    GetProcessesByHarness ?? (_ => []),
+                    KillHarness           ?? (_ => { })),
+                log: new LogWindow());
+
             w.Show();
             _dashboardWindow = w;  // assign only after Show() succeeds
         }
         WindowActivation.Surface(_dashboardWindow);
     }
 
-    private void OpenLogWindow()
+    private void ShowDashboardTab(DashboardWindow.DashboardTab tab)
     {
-        if (_logWindow is null || !_logWindow.IsLoaded)
-        {
-            var w = new LogWindow();
-            w.Show();
-            _logWindow = w;  // assign only after Show() succeeds — prevents activating a bad window
-        }
-        WindowActivation.Surface(_logWindow);
+        OpenDashboardWindow();
+        _dashboardWindow?.ShowTab(tab);
     }
 
-    private void OpenBehaviorMetricsWindow()
-    {
-        if (_behaviorWindow is null || !_behaviorWindow.IsLoaded)
-        {
-            _behaviorWindow = new BehaviorMetricsWindow(
-                _settings,
-                GetBehaviorProfiles  ?? (() => []),
-                ResetBehaviorProfile ?? (_ => { }),
-                GetProcessesByHarness ?? (_ => []),
-                KillHarness          ?? (_ => { }));
-            _behaviorWindow.Show();
-        }
-        WindowActivation.Surface(_behaviorWindow);
-    }
-
-    private void OpenProcessMonitorWindow()
-    {
-        if (_processWindow is null || !_processWindow.IsLoaded)
-        {
-            _processWindow = new ProcessMonitorWindow(GetProcessSnapshot ?? (() => []), GetNetRate);
-            _processWindow.Show();
-        }
-        WindowActivation.Surface(_processWindow);
-    }
-
-    private void OpenHarnessesWindow()
-    {
-        if (_harnessesWindow is null || !_harnessesWindow.IsLoaded)
-        {
-            Func<IEnumerable<Foreman.Core.Models.ProcessRecord>> snap =
-                GetProcessSnapshot ?? (() => []);
-            _harnessesWindow = new HarnessesWindow(_settings, snap);
-            _harnessesWindow.Show();
-        }
-        WindowActivation.Surface(_harnessesWindow);
-    }
+    // The former standalone windows are now dashboard tabs; these keep all existing callers working.
+    private void OpenLogWindow()             => ShowDashboardTab(DashboardWindow.DashboardTab.Log);
+    private void OpenProcessMonitorWindow()  => ShowDashboardTab(DashboardWindow.DashboardTab.Processes);
+    private void OpenHarnessesWindow()       => ShowDashboardTab(DashboardWindow.DashboardTab.Harnesses);
+    private void OpenBehaviorMetricsWindow() => ShowDashboardTab(DashboardWindow.DashboardTab.Behavior);
 
     private void SendTestAlert()
     {
@@ -403,10 +374,7 @@ public sealed class TrayController : IEventSink, IDisposable
 
     public void Dispose()
     {
-        _dashboardWindow?.Close();
-        _processWindow?.Close();
-        _behaviorWindow?.Close();
-        _harnessesWindow?.Close();
+        _dashboardWindow?.Close();   // disposes its hosted Process/Harness/Behavior/Log views
         _settingsWindow?.Close();
         _connectWindow?.Close();
         _tray?.Dispose();
