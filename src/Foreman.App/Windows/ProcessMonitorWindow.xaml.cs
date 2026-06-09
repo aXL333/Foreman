@@ -85,6 +85,7 @@ public partial class ProcessMonitorWindow : Window
             CmdLineDetail.Foreground = (Brush)FindResource("TextMutedBrush");
             CopyPidBtn.IsEnabled = false;
             CopyCmdBtn.IsEnabled = false;
+            CopyHashBtn.IsEnabled = false;
         }
         else
         {
@@ -94,6 +95,7 @@ public partial class ProcessMonitorWindow : Window
             CmdLineDetail.Foreground = (Brush)FindResource("TextPrimaryBrush");
             CopyPidBtn.IsEnabled = true;
             CopyCmdBtn.IsEnabled = !string.IsNullOrEmpty(_selected.CommandLineFull);
+            CopyHashBtn.IsEnabled = _selected.HashFull is { Length: > 0 };
         }
     }
 
