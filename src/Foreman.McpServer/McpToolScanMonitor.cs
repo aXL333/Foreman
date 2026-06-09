@@ -88,12 +88,17 @@ public sealed class McpToolScanMonitor : IDisposable
                 catch { unreachable++; }        // needs its own auth / offline / not an MCP endpoint
             }
 
-            int skipped = snapshot.Count - targets.Count;
+            // Name what was skipped and why, so "1 skipped" isn't a mystery (it's usually Foreman itself).
+            var skipped = snapshot
+                .Where(e => !IsScannable(e))
+                .Select(e => $"{e.Name} ({SkipReason(e)})")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
             _current = findings;
             PublishNew(findings);
             _lastSummary =
-                $"Scanned {scanned} MCP server(s): {findings.Count} finding(s), " +
-                $"{unreachable} unreachable, {skipped} stdio/self skipped.";
+                $"Scanned {scanned} MCP server(s): {findings.Count} finding(s), {unreachable} unreachable" +
+                (skipped.Count > 0 ? $"; skipped {skipped.Count}: {string.Join(", ", skipped)}" : "; nothing skipped") + ".";
             _bus.Publish(new MonitoringNoticeEvent(
                 DateTimeOffset.UtcNow, ForemanSeverity.Info, "Foreman.McpToolScan", _lastSummary));
             return findings;
@@ -102,6 +107,16 @@ public sealed class McpToolScanMonitor : IDisposable
     }
 
     private bool IsScannable(McpServerEntry e) => IsScannableTarget(e.Target, _ownPort);
+
+    // Why a server was skipped — for the human-readable scan summary.
+    private string SkipReason(McpServerEntry e)
+    {
+        if (!Uri.TryCreate(e.Target, UriKind.Absolute, out var u)) return "stdio";
+        if (u.Scheme != Uri.UriSchemeHttp && u.Scheme != Uri.UriSchemeHttps) return "non-http";
+        var isLocal = u.IsLoopback || string.Equals(u.Host, "localhost", StringComparison.OrdinalIgnoreCase);
+        if (isLocal && u.Port == _ownPort) return "self";
+        return "skipped";
+    }
 
     /// <summary>
     /// True if a server target is something we'll probe: an absolute http(s) URL that isn't Foreman's
