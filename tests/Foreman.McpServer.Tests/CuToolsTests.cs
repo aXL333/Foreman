@@ -200,6 +200,22 @@ public sealed class CuToolsTests
     }
 
     [Fact]
+    public async Task CuAndroid_HeldApprovalRequiresFreshPresenceGate()
+    {
+        var state = StateWithAndroid("codex");
+        using var sub = Json(await ForemanMcpTools.CuSubmit(
+            "android", "tap", "{\"serial\":\"device-1\",\"x\":\"1\",\"y\":\"2\"}", AsHarness("codex")));
+        var id = sub.RootElement.GetProperty("actionId").GetString()!;
+
+        using var denied = Json(await ForemanMcpTools.CuApprove(id));
+        Assert.False(denied.RootElement.GetProperty("ok").GetBoolean());
+
+        state.CuPresenceApprovalGate = modality => Task.FromResult(modality == CuModality.Android);
+        using var approved = Json(await ForemanMcpTools.CuApprove(id));
+        Assert.True(approved.RootElement.GetProperty("ok").GetBoolean());
+    }
+
+    [Fact]
     public async Task CuSubmit_Hold_OperatorApprove_PollExecute_Complete()
     {
         StateWith(CuVerdict.Hold("test", "uncertain"));
@@ -361,6 +377,26 @@ public sealed class CuToolsTests
             actionId, "{{vault:example.com/signup}}", "example.com", AsHarness("browser-extension")));
         Assert.True(res.RootElement.GetProperty("ok").GetBoolean());
         Assert.Equal("generated-pw", res.RootElement.GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public async Task CuResolveVault_EmbeddedPaymentCardToken_RefusedBeforeResolver()
+    {
+        var state = StateWith(CuVerdict.Allow("test"));
+        var resolverCalled = false;
+        state.ResolveVaultAsync = (_, _, _) =>
+        {
+            resolverCalled = true;
+            return Task.FromResult<(bool Ok, string? Value, string Reason, bool Queued)>((true, "should-not-reach", "ok", false));
+        };
+        var token = "{{vault:shop.example/personal01/cardnumber}}";
+        var actionId = await ExecutingBrowserAction("prefix " + token);
+
+        using var res = Json(await ForemanMcpTools.CuResolveVault(
+            actionId, token, "shop.example", AsHarness("browser-extension")));
+
+        Assert.False(res.RootElement.GetProperty("ok").GetBoolean());
+        Assert.False(resolverCalled);
     }
 
     [Fact]

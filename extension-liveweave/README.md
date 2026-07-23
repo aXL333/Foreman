@@ -1,6 +1,6 @@
 # Foreman LiveWeave browser extension
 
-LiveWeave 0.4.1 is a Manifest V3 visual website workspace linked to the local Foreman desktop app over loopback. It
+LiveWeave 0.4.2 is a Manifest V3 visual website workspace linked to the local Foreman desktop app over loopback. It
 can start from a blank project or import a rendered page snapshot, lets the operator select the exact rendered
 element, and routes a scoped creation, improvement, or rework prompt either to a chosen Foreman harness or Chrome's
 on-device Nano model. Editing and previewing happen in extension-owned pages; the source tab is never modified.
@@ -73,7 +73,10 @@ Nano prompts.
 ## Load and pair
 
 1. Run Foreman so its MCP server is listening on `127.0.0.1:54321`.
-2. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `extension-liveweave/`.
+2. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select either:
+   - installed release: `%LOCALAPPDATA%\Programs\Foreman\extensions\liveweave` (an upgraded alpha may retain
+     `%LOCALAPPDATA%\Foreman\extensions\liveweave`); or
+   - source checkout: `extension-liveweave/`.
 3. In Foreman, open **Connect agent -> Pair browser extension**.
 4. Open LiveWeave extension options, select a driver harness, enter the code, and pair.
 5. Reload the unpacked extension after changing its source files.

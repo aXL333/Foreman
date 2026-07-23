@@ -1,5 +1,6 @@
 using Foreman.Core.Behavior;
 using Foreman.Core.Events;
+using Foreman.Core.Heuristics;
 using Foreman.Core.Mcp;
 using Foreman.Core.Models;
 using Foreman.Core.Profiles;
@@ -175,6 +176,7 @@ public sealed class CallerScopeToolTests : IDisposable
 
     public CallerScopeToolTests()
     {
+        PatternLibrary.Instance.Initialize();
         _profileDir = Path.Combine(Path.GetTempPath(), "foreman-scope-" + Guid.NewGuid().ToString("N")[..8]);
         _store = new ProfileStore(_profileDir);
         _store.Initialize();
@@ -403,6 +405,16 @@ public sealed class CallerScopeToolTests : IDisposable
         using var doc = J(ForemanMcpTools.ReportSuspiciousCommand(
             "echo hello world", harnessId: "claude-code", http: AsOperator));
         Assert.Equal("claude-code", doc.RootElement.GetProperty("harnessId").GetString());
+    }
+
+    [Fact]
+    public void ReportSuspiciousCommand_PeerMismatchCannotMintAlertNoise()
+    {
+        using var doc = J(ForemanMcpTools.ReportSuspiciousCommand(
+            "rm -rf /", http: AsCodexStolen));
+
+        Assert.False(doc.RootElement.GetProperty("alertPublished").GetBoolean());
+        Assert.False(doc.RootElement.GetProperty("rateLimited").GetBoolean());
     }
 
     // ── Process broker: own-tree reaping is executed + recorded; cross-tree is refused; theft is refused ──────

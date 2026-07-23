@@ -14,7 +14,15 @@ public sealed class SettingsStoreTests : IDisposable
         _path = Path.Combine(_dir, "settings.json");
     }
 
-    public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
+    public void Dispose()
+    {
+        SettingsStore.IntegritySecret = null;
+        SettingsStore.Sealer = null;
+        SettingsStore.HasPriorSealEvidence = null;
+        SettingsStore.RecordSealEvidence = null;
+        SettingsStore.IntegritySecretRecentlyRegenerated = null;
+        try { Directory.Delete(_dir, true); } catch { }
+    }
 
     [Fact]
     public void Save_ThenLoad_RoundTrips()
@@ -76,5 +84,122 @@ public sealed class SettingsStoreTests : IDisposable
 
         Assert.Equal(33333, SettingsStore.Load(_path).McpPort);
         Assert.Null(SettingsStore.LastLoadFault);                    // a clean load clears the prior fault
+    }
+
+    [Fact]
+    public void TamperedSecuritySettings_AreRevertedBeforeLoadReturns()
+    {
+        SettingsStore.IntegritySecret = () => "test-install-secret";
+        var approved = new ForemanSettings { CuDriver = "codex" };
+        approved.PresenceLock.Enabled = true;
+        approved.AdbBridge.Enabled = false;
+        SettingsStore.Save(approved, _path);
+
+        var attackerJson = File.ReadAllText(_path)
+            .Replace("\"Enabled\": true", "\"Enabled\": false", StringComparison.Ordinal)
+            .Replace("\"CuDriver\": \"codex\"", "\"CuDriver\": \"any\"", StringComparison.Ordinal);
+        File.WriteAllText(_path, attackerJson);
+
+        var loaded = SettingsStore.Load(_path);
+
+        Assert.Equal(SettingsSealVerdict.Tampered, SettingsStore.LastSealVerdict);
+        Assert.True(loaded.PresenceLock.Enabled);
+        Assert.Equal("codex", loaded.CuDriver);
+        Assert.False(loaded.AdbBridge.Enabled);
+        Assert.Contains("last-known-good", SettingsStore.LastLoadFault!);
+        Assert.NotEmpty(Directory.GetFiles(_dir, "settings.json.*.tampered"));
+    }
+
+    [Fact]
+    public void TamperedSecuritySettings_WithoutRecovery_LoadSafeDefaults()
+    {
+        const string secret = "test-install-secret";
+        SettingsStore.IntegritySecret = () => secret;
+        var attackerSettings = new ForemanSettings { CuDriver = "any", RunElevated = true };
+        attackerSettings.AdbBridge.Enabled = true;
+        attackerSettings.AdbBridge.ExecutablePath = @"C:\attacker.exe";
+        File.WriteAllText(_path, System.Text.Json.JsonSerializer.Serialize(attackerSettings));
+        File.WriteAllText(_path + ".seal", SettingsSeal.Compute(new ForemanSettings(), secret));
+
+        var loaded = SettingsStore.Load(_path);
+
+        Assert.Equal(SettingsSealVerdict.Tampered, SettingsStore.LastSealVerdict);
+        Assert.Null(loaded.CuDriver);
+        Assert.False(loaded.RunElevated);
+        Assert.False(loaded.AdbBridge.Enabled);
+        Assert.Contains("safe defaults", SettingsStore.LastLoadFault!);
+    }
+
+    [Fact]
+    public void MissingPrimarySeal_WithVerifiedRecovery_IsTamperAndRestoresRecovery()
+    {
+        SettingsStore.IntegritySecret = () => "test-install-secret";
+        var approved = new ForemanSettings { CuDriver = "codex" };
+        approved.PresenceLock.Enabled = true;
+        SettingsStore.Save(approved, _path);
+
+        var attackerJson = File.ReadAllText(_path)
+            .Replace("\"Enabled\": true", "\"Enabled\": false", StringComparison.Ordinal)
+            .Replace("\"CuDriver\": \"codex\"", "\"CuDriver\": \"any\"", StringComparison.Ordinal);
+        File.WriteAllText(_path, attackerJson);
+        File.Delete(_path + ".seal");
+
+        var loaded = SettingsStore.Load(_path);
+
+        Assert.Equal(SettingsSealVerdict.Tampered, SettingsStore.LastSealVerdict);
+        Assert.True(loaded.PresenceLock.Enabled);
+        Assert.Equal("codex", loaded.CuDriver);
+        Assert.Contains("last-known-good", SettingsStore.LastLoadFault!);
+    }
+
+    [Fact]
+    public void MissingAllSeals_AfterDurableSealEvidence_LoadsSafeDefaults()
+    {
+        SettingsStore.IntegritySecret = () => "test-install-secret";
+        SettingsStore.HasPriorSealEvidence = () => true;
+        var attacker = new ForemanSettings { RunElevated = true };
+        attacker.AdbBridge.Enabled = true;
+        File.WriteAllText(_path, System.Text.Json.JsonSerializer.Serialize(attacker));
+
+        var loaded = SettingsStore.Load(_path);
+
+        Assert.Equal(SettingsSealVerdict.Tampered, SettingsStore.LastSealVerdict);
+        Assert.False(loaded.RunElevated);
+        Assert.False(loaded.AdbBridge.Enabled);
+    }
+
+    [Fact]
+    public void RecentLocalSecretRotation_PreservesAndResealsUnchangedSettings()
+    {
+        var secret = "old-test-install-secret";
+        SettingsStore.IntegritySecret = () => secret;
+        SettingsStore.Save(new ForemanSettings { McpPort = 49199, CuDriver = "codex" }, _path);
+
+        secret = "new-test-install-secret";
+        SettingsStore.IntegritySecretRecentlyRegenerated = () => true;
+        var loaded = SettingsStore.Load(_path);
+
+        Assert.Equal(49199, loaded.McpPort);
+        Assert.Equal("codex", loaded.CuDriver);
+        Assert.Equal(SettingsSealVerdict.Sealed, SettingsStore.LastSealVerdict);
+        Assert.Equal(SettingsSealVerdict.Sealed,
+            SettingsSeal.Verify(loaded, File.ReadAllText(_path + ".seal").Trim(), secret));
+    }
+
+    [Fact]
+    public void RecentLocalSecretRotation_DoesNotBlessCurrentOnlyEdit()
+    {
+        var secret = "old-test-install-secret";
+        SettingsStore.IntegritySecret = () => secret;
+        SettingsStore.Save(new ForemanSettings { CuDriver = "codex" }, _path);
+        File.WriteAllText(_path, File.ReadAllText(_path)
+            .Replace("\"CuDriver\": \"codex\"", "\"CuDriver\": \"any\"", StringComparison.Ordinal));
+
+        secret = "new-test-install-secret";
+        SettingsStore.IntegritySecretRecentlyRegenerated = () => true;
+        var loaded = SettingsStore.Load(_path);
+
+        Assert.NotEqual("any", loaded.CuDriver);
+        Assert.Equal(SettingsSealVerdict.Tampered, SettingsStore.LastSealVerdict);
     }
 }

@@ -15,9 +15,9 @@ namespace Foreman.Guardian;
 ///    confirms its OWN binary carries the same signer as the installed Foreman.exe — so an agent that overwrote
 ///    the user-writable staged guardian binary can't get its code registered as SYSTEM.
 ///
-/// Install verification auto-adapts to dev vs release. Runtime pipe authentication does not use this permissive
-/// decision directly: <see cref="GuardianClientPolicy"/> pins an unsigned development build by canonical path and
-/// SHA-256, or pins the verified publisher for signed builds.
+/// Install verification requires a signer match for releases. Unsigned development builds are admitted only after
+/// <see cref="GuardianInstallReference"/> resolves a live Foreman launcher and proves the canonical staged layout;
+/// runtime pipe authentication then pins that exact development path + SHA-256.
 ///
 /// Deliberately duplicated from SidecarIntegrity (App is WPF the guardian must not reference; Core is
 /// cross-platform so Windows-only WinVerifyTrust can't live there). CONSOLIDATE into a shared Windows platform
@@ -26,11 +26,11 @@ namespace Foreman.Guardian;
 [SupportedOSPlatform("windows")]
 public static class GuardianIntegrity
 {
-    /// <summary>Pure trust decision from two VERIFIED signer thumbprints (null = unsigned/invalid).</summary>
+    /// <summary>Pure release trust decision from two VERIFIED signer thumbprints (null = unsigned/invalid).</summary>
     public static (bool Trusted, string Reason) Decide(string? referenceSigner, string? subjectSigner)
     {
         if (referenceSigner is null)
-            return (true, "reference binary is unsigned (dev build) — signature not enforced.");
+            return (false, "the Foreman reference is unsigned or its Authenticode signature is invalid.");
         if (subjectSigner is null)
             return (false, "the subject binary is unsigned or its Authenticode signature is invalid, but the reference is signed.");
         if (!string.Equals(referenceSigner, subjectSigner, StringComparison.OrdinalIgnoreCase))
@@ -38,27 +38,60 @@ public static class GuardianIntegrity
         return (true, "Authenticode signer matches the reference publisher.");
     }
 
-    /// <summary>Install self-verify: is THIS guardian binary signed by the same publisher as Foreman.exe? Never throws.</summary>
-    public static (bool Trusted, string Reason) VerifyForInstall(string? foremanPath) =>
-        SafeVerify(reference: foremanPath, subject: Environment.ProcessPath);
-
-    private static (bool, string) SafeVerify(string? reference, string? subject)
+    /// <summary>
+    /// Install self-verify: is THIS guardian binary signed by the same publisher as Foreman.exe? The resolved live
+    /// launcher must also match the administrator-owned install root once one exists. Unsigned developer builds are
+    /// admitted only with an explicit opt-in; shipped unsigned builds fail closed by default. Never throws.
+    /// </summary>
+    public static (bool Trusted, string Reason) VerifyForInstall(
+        string? foremanPath,
+        string? guardianPath,
+        string? recordedInstallRoot,
+        bool allowUnsignedDevelopment)
     {
         try
         {
-            return Decide(VerifiedSignerThumbprint(reference), VerifiedSignerThumbprint(subject));
+            var referenceSigner = VerifiedSignerThumbprint(foremanPath);
+            var subjectSigner = VerifiedSignerThumbprint(guardianPath);
+            return DecideForInstall(referenceSigner, subjectSigner, foremanPath, guardianPath,
+                recordedInstallRoot, allowUnsignedDevelopment);
         }
         catch
         {
-            // Fault → fail CLOSED only when the reference is signed; otherwise (dev) allow.
-            var refSigned = SafeVerifiedSigner(reference) is not null;
-            return refSigned
-                ? (false, "integrity check failed unexpectedly while the reference is signed.")
-                : (true, "integrity check inconclusive; reference is unsigned (dev).");
+            return (false, "guardian install integrity verification failed unexpectedly.");
         }
     }
 
-    private static string? SafeVerifiedSigner(string? p) { try { return VerifiedSignerThumbprint(p); } catch { return null; } }
+    /// <summary>Pure production install decision over already-verified signer and path evidence.</summary>
+    public static (bool Trusted, string Reason) DecideForInstall(
+        string? referenceSigner,
+        string? subjectSigner,
+        string? foremanPath,
+        string? guardianPath,
+        string? recordedInstallRoot,
+        bool allowUnsignedDevelopment)
+    {
+        if (string.IsNullOrWhiteSpace(foremanPath) || string.IsNullOrWhiteSpace(guardianPath) ||
+            !GuardianInstallReference.LayoutMatches(foremanPath, guardianPath))
+            return (false, "the live launcher and guardian do not match Foreman's canonical staged layout.");
+
+        var resolvedRoot = GuardianInstallRoot.RootForExecutable(foremanPath);
+        if (!string.IsNullOrWhiteSpace(recordedInstallRoot) &&
+            !string.Equals(resolvedRoot,
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(recordedInstallRoot)),
+                StringComparison.OrdinalIgnoreCase))
+            return (false, "the live launcher is outside the administrator-recorded Foreman install root.");
+
+        if (referenceSigner is not null)
+            return Decide(referenceSigner, subjectSigner);
+
+        if (!allowUnsignedDevelopment)
+            return (false, "Foreman is unsigned; Guardian installation requires an explicit --allow-unsigned-development opt-in.");
+        if (subjectSigner is not null)
+            return (false, "an unsigned Foreman reference cannot authorise a differently-signed guardian.");
+
+        return (true, "explicit unsigned-development install matched the live launcher, staged layout, and recorded root.");
+    }
 
     /// <summary>Authenticode signer thumbprint IF the file's embedded signature is valid (chains to a trusted root); else null.</summary>
     public static string? VerifiedSignerThumbprint(string? path)

@@ -19,4 +19,69 @@ public sealed class EventBusTests
 
         Assert.Equal(1, count);
     }
+
+    [Fact]
+    public void BoundedHistory_RetainsUnacknowledgedCriticalAheadOfNewNoise()
+    {
+        var history = new BoundedEventHistory(3);
+        var critical = new MonitoringNoticeEvent(
+            DateTimeOffset.UnixEpoch, ForemanSeverity.Critical, "test", "do not lose me");
+        history.Add(critical);
+        history.Add(new InfoEvent(DateTimeOffset.UnixEpoch.AddSeconds(1), "test", "noise 1"));
+        history.Add(new InfoEvent(DateTimeOffset.UnixEpoch.AddSeconds(2), "test", "noise 2"));
+        history.Add(new InfoEvent(DateTimeOffset.UnixEpoch.AddSeconds(3), "test", "noise 3"));
+
+        Assert.Contains(history.Snapshot(), e => e.Id == critical.Id);
+        Assert.Equal(3, history.Snapshot().Count);
+    }
+
+    [Fact]
+    public void BoundedHistory_EvictsAcknowledgedCriticalBeforeActiveNoise()
+    {
+        var history = new BoundedEventHistory(2);
+        var acknowledged = new MonitoringNoticeEvent(
+            DateTimeOffset.UnixEpoch, ForemanSeverity.Critical, "test", "resolved") { Acknowledged = true };
+        history.Add(acknowledged);
+        history.Add(new MonitoringNoticeEvent(
+            DateTimeOffset.UnixEpoch.AddSeconds(1), ForemanSeverity.Medium, "test", "active"));
+        history.Add(new MonitoringNoticeEvent(
+            DateTimeOffset.UnixEpoch.AddSeconds(2), ForemanSeverity.Medium, "test", "new"));
+
+        Assert.DoesNotContain(history.Snapshot(), e => e.Id == acknowledged.Id);
+    }
+
+    [Fact]
+    public void BoundedHistory_AgentCriticalFloodCannotDropArrivingHostHigh()
+    {
+        var history = new BoundedEventHistory(1000);
+        for (var i = 0; i < 1_100; i++)
+            history.Add(AgentCritical(i));
+
+        var hostHigh = new MonitoringNoticeEvent(
+            DateTimeOffset.UtcNow, ForemanSeverity.High, "Foreman.Settings", "genuine host alarm");
+        history.Add(hostHigh);
+
+        Assert.Contains(history.Snapshot(), e => e.Id == hostHigh.Id);
+        Assert.True(history.Snapshot().Count(e => EventRetentionPolicy.IsAgentReported(e)) <= 250);
+    }
+
+    [Fact]
+    public void BoundedHistory_ArrivingHostCriticalIsNeverItsOwnEvictionVictim()
+    {
+        var history = new BoundedEventHistory(2);
+        history.Add(new MonitoringNoticeEvent(
+            DateTimeOffset.UtcNow, ForemanSeverity.Critical, "Foreman.Guardian", "host one"));
+        history.Add(new MonitoringNoticeEvent(
+            DateTimeOffset.UtcNow, ForemanSeverity.Critical, "Foreman.Guardian", "host two"));
+        var arriving = new MonitoringNoticeEvent(
+            DateTimeOffset.UnixEpoch, ForemanSeverity.Critical, "Foreman.Settings", "arriving host");
+
+        history.Add(arriving);
+
+        Assert.Contains(history.Snapshot(), e => e.Id == arriving.Id);
+    }
+
+    private static CommandAlertEvent AgentCritical(int index) => new(
+        DateTimeOffset.UtcNow.AddMilliseconds(index), ForemanSeverity.Critical,
+        "MCP.ReportSuspiciousCommand", $"fabricated {index}", "rm -rf /", "del-001", "delete", "test", "none", 0);
 }
